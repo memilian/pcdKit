@@ -1,0 +1,24 @@
+.expand-btn {
+  padding: 0 0.6em 0.6em !important;
+}
+.expand-btn:hover {
+  color: #000;
+}
+.fix-label {
+  transform: translateX(0px) translateY(-100%) !important;
+}
+.fix-label.active {
+  transform: translateX(10px) translateY(-100%) !important;
+}
+.ui-layout-resizer {
+  background-color: #606060;
+}
+.ui-layout-toggler {
+  background-color: #848484;
+}
+.ui-layout-resizer:hover {
+  background-color: #40baff;
+}
+.ui-layout-toggler:hover {
+  background-color: #2e7eb0;
+}

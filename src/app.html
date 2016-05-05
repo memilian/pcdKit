@@ -1,0 +1,13 @@
+<template>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link href="styles/styles.css" rel="stylesheet">
+
+  <require from="nav-bar.html"></require>
+  <nav-bar router.bind="router"></nav-bar>
+  <md-colors md-primary-color.bind="primaryColor" md-accent-color.bind="accentColor"></md-colors>
+  <div class="page-host">
+    <router-view></router-view>
+  </div>
+  <compose view-model="widgets/modal"></compose>
+</template>
+</template>

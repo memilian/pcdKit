@@ -1,0 +1,10 @@
+dist
+.idea
+jspm_packages
+node_modules
+pcd_tools/Libraries
+pcd_tools/Kha
+pcd_tools/build
+*.iml
+*.last
+*.new

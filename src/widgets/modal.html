@@ -1,0 +1,17 @@
+<template>
+    <div>
+        <div id="modal1" class="modal" ref="modal">
+            <div class="modal-content">
+                <h4>${header}</h4>
+                <p>${content}</p>
+            </div>
+            <div class="modal-footer">
+                <a click.delegate="agree()" md-button="flat: true;" md-waves="color: accent;" class="modal-action modal-close">${okText}</a>
+                <a click.delegate="disagree()" md-button="flat: true;" md-waves="color: accent;" class="modal-action modal-close">${nokText}</a>
+            </div>
+        </div>
+        <div style="display:none;">
+            <p><a md-button md-modal-trigger href="#modal1" ref="btn">show modal</a></p>
+        </div>
+    </div>
+</template>

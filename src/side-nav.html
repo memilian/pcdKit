@@ -1,0 +1,46 @@
+<template>
+    <div class="row">
+        <ul md-collapsible="accordion: true;" class="col s12">
+            <li >
+                <div class="collapsible-header accent-text"><i class="mdi-maps-place"></i>Projects</div>
+                <div class="collapsible-body">
+                    <ul>
+                        <li>
+                            <div class="input-field row">
+                                <div class="col s10">
+                                    <input id="new_project" type="text" class="au-target" value.bind="newName" au-target-id="102">
+                                    <label class="fix-label" for="new_project">Project Name</label>
+                                </div>
+                                <span class="btn-floating" click.delegate="newProject()"><i class="material-icons">create</i></span>
+                            </div>
+                        </li>
+                        <li repeat.for="project of projects" class="row" >
+                            <a href="#" click.trigger="loadProject(project)" class="col s10">${project}</a>
+                            <span class="btn-floating red" click.delegate="deleteProject(project)"><i class="material-icons">delete</i></span>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+            <li>
+                <div class="collapsible-header accent-text"><i class="mdi-maps-place"></i>Modules</div>
+                <div class="collapsible-body">
+                    <ul show.bind="loadedProject!==null">
+                        <li>
+                            <div class="input-field row">
+                                <div class="col s10">
+                                    <input id="new_module" type="text" class="au-target" value.bind="newModuleName" au-target-id="102">
+                                    <label class="fix-label" for="new_module">Module Name</label>
+                                </div>
+                                <span class="btn-floating" click.delegate="newModule()"><i class="material-icons">create</i></span>
+                            </div>
+                        </li>
+                        <li repeat.for="module of loadedProject.modules" class="row" >
+                            <a href="#" click.trigger="loadModule(module)" class="col s10">${module.name}</a>
+                            <span class="btn-floating red" click.delegate="deleteModule(module)"><i class="material-icons">delete</i></span>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+        </ul>
+    </div>
+</template>
