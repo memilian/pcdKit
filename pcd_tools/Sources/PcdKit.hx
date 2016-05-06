@@ -1,5 +1,7 @@
 package;
 
+import kha.ScreenRotation;
+import kha.Scaler;
 import TexGenActivity.TexGenMessage;
 import activity.MessageQueue;
 import activity.Activity;
@@ -46,7 +48,8 @@ class PcdKit {
 		Scheduler.addTimeTask(update, 0, 1 / 60);
 
 		PcdKit.events = untyped eventAggregator;
-		PcdKit.events.subscribe('editor-attached', this.editorLoaded);
+		//PcdKit.events.subscribe('editor-attached', this.editorLoaded);
+		PcdKit.events.subscribe('code-changed', this.oncodechanged);
 		this.editorLoaded();
 		parser = new Parser();
 		interp = new Interp();
@@ -60,7 +63,7 @@ class PcdKit {
 
 	public function editorLoaded():Void {
 		untyped this.editor = window.editor;
-		editor.getSession().on('change', oncodechanged);
+		//editor.getSession().on('change', oncodechanged);
 		editor.completers.push({
 			getCompletions: function(editor, session, pos, prefix, callback) {
 				var candidates = [];
@@ -135,10 +138,11 @@ class PcdKit {
 	var throttle = 0.3;
 	var lastChange = 0.0;
 	var codeDirty = false;
-	public function oncodechanged(_):Void {
-		if(ProjectManager.currentProject == null) return;
+	public function oncodechanged(infos):Void {
+		var module = ProjectManager.currentProject.getModuleNamed(infos.module.name);
+		module.code = infos.code;
+		ProjectManager.currentProject.save();
 		lastChange = Scheduler.realTime();
-		ProjectManager.currentModule.code = editor.getSession().getDocument().$lines.join('\n');
 		codeDirty = true;
 	}
 
@@ -152,9 +156,10 @@ class PcdKit {
 			module = interp.variables.get('module');
 			if(module != null)
 				generateTexture();
-			ProjectManager.currentProject.save();
 		}catch(ex : Dynamic){
-			trace(ex);
+			PcdKit.events.publish('interp-error',{
+				message:ex
+			});
 		}
 	}
 
@@ -178,7 +183,7 @@ class PcdKit {
 
 		var g = framebuffer.g2;
 		g.begin(true, Color.White);
-		g.drawImage(texture,100,100);
+		Scaler.scale(texture,framebuffer, ScreenRotation.RotationNone);//g.drawImage(texture,100,100);
 		g.end();
 	}
 }

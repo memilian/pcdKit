@@ -37,14 +37,15 @@ gulp.task('build-css', function() {
   return gulp.src(paths.css)
       .pipe(changed(paths.output))
       .pipe(gulp.dest(paths.output))
-      .pipe(browserSync.stream());
+      .pipe(browserSync.reload({stream: true}));
 });
 
 gulp.task('build-stylus', function() {
   return gulp.src(paths.stylus)
-      .pipe(changed(paths.stylusOutput))
+      .pipe(plumber({errorHandler: notify.onError('Error: <%= error.message %>')}))
       .pipe(stylus())
-      .pipe(gulp.dest(paths.stylusOutput))
+      .pipe(changed(paths.output))
+      .pipe(gulp.dest(paths.output))
 });
 
 // this task calls the clean task (located

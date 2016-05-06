@@ -6,22 +6,13 @@
     <div class="ui-layout-center">
       <compose ref="editor" view-model.ref="editorVM"  view-model="widgets/editor"></compose>
     </div>
-    <div class="ui-layout-east">
-      <compose ref="canvas"  view-model="widgets/khanvas"></compose>
+    <div class="ui-layout-east" id="renderer-layout-container">
+      <div class="render-layout-north">
+        <!-- render options -->
+      </div>
+      <div class="render-layout-center">
+        <compose ref="canvas"  view-model="widgets/khanvas"></compose>
+      </div>
     </div>
   </div>
-  <!--
-  <div class="snap-drawers">
-    <div class="snap-drawer snap-drawer-left" >
-
-    </div>
-  </div>
-  <div class="snap-content" style="height:100%;" ref="content">
-    <div  style="height:100%;" >
-      <div class="gutter gutter-horizontal" click.trigger="gutterClicked()" ref="gutter" style="width:10px; z-index: 5;" ></div>
-
-
-    </div>
-  </div>
-  -->
 </template>

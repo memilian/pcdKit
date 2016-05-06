@@ -13,6 +13,7 @@ export class Editor{
 
     constructor(eva){
         this.eva = eva;
+        this.module = null;
     }
 
     attached(){
@@ -28,7 +29,20 @@ export class Editor{
         });
         this.eva.publish('editor-attached');
 
+        editor.getSession().on('change', function(){
+            if(this.module == null) return;
+            var code = editor.getSession().getDocument().$lines.join('\n');
+            console.log('editor code changed');
+            this.eva.publish('code-changed', {
+                module: this.module,
+                code : code
+            });
+        }.bind(this));
+
         this.eva.subscribe('module-loaded', function(module){
+            console.log('module '+module.name+' loaded with code :'+module.code);
+            if(module === undefined) module = null;
+            this.module = module;
             editor.getSession().getDocument().setValue(module.code);
         }.bind(this));
     }

@@ -1,8 +1,8 @@
 
 export class App {
 
-  primaryColor = '#838996';
-  accentColor = '#289ADD';
+  primaryColor = '#22aadd';
+  accentColor =  '#1199cc';
 
   configureRouter(config, router) {
     config.title = 'PcdKit';

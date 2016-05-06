@@ -3,7 +3,7 @@ package ;
 @:expose
 class Module {
 
-    @:isVar public var code(default, set) : String = "";
+    @:isVar public var code(default, set) : String = "module = new Const(0);";
 
     public function set_code(value : String){
         lastEdit = Date.now();

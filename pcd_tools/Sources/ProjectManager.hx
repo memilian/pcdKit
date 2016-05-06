@@ -32,7 +32,7 @@ class ProjectManager {
         return project;
     }
 
-    public static function createProject(name : String):Void {
+    public static function createProject(name : String):Project {
         var projects = getProjects();
         var i = 1;
         var newName = name;
@@ -44,10 +44,12 @@ class ProjectManager {
         projects.push(newName);
         Storage.defaultFile().writeObject(projects);
         Storage.namedFile(newName).writeObject(proj);
+        return proj;
     }
 
     public static function saveProject(project:Project):Void {
         Storage.namedFile(project.name).writeObject(project);
+        trace('project saved');
     }
 
     public static function deleteProject(name : String):Void {

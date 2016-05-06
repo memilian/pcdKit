@@ -8,6 +8,7 @@ System.config({
     "resources/*": "resources/*",
     "theme-*": "ace/*"
   },
+
   map: {
     "ace": "github:ajaxorg/ace-builds@1.2.3",
     "aurelia-animator-css": "npm:aurelia-animator-css@1.0.0-beta.1.2.0",
@@ -28,7 +29,7 @@ System.config({
     "bootstrap": "github:twbs/bootstrap@3.3.6",
     "fetch": "github:github/fetch@0.11.0",
     "font-awesome": "npm:font-awesome@4.6.1",
-    "jquery-layout": "github:allpro/layout@1.4.3",
+    "jquery-layout": "github:quicklyfrozen/layout@1.4.4",
     "jquery-ui-draggable": "github:memilian/jquery-ui-draggable@master",
     "kha": "resources/kha",
     "systemjs/plugin-css": "github:systemjs/plugin-css@0.1.21",
@@ -36,13 +37,6 @@ System.config({
     "theme-monokai.js": "github:ajaxorg/ace-builds@1.2.3",
     "github:Dogfalo/materialize@0.97.6": {
       "css": "github:systemjs/plugin-css@0.1.21",
-      "jquery": "npm:jquery@2.2.3"
-    },
-    "github:allpro/layout@1.4.3": {
-      "jquery": "github:components/jquery@2.2.1",
-      "jquery-ui": "github:components/jqueryui@1.11.4"
-    },
-    "github:components/jqueryui@1.11.4": {
       "jquery": "npm:jquery@2.2.3"
     },
     "github:twbs/bootstrap@3.3.6": {

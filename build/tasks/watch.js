@@ -22,6 +22,6 @@ gulp.task('watch', ['serve'], function() {
     console.log('ok');
     return gulp.src(paths.style)
         .pipe(changed(paths.style))
-      .pipe(browserSync.stream());
+      .pipe(browserSync.stream({match:'**/*.css'}));
   }).on('change', reportChange);
 });

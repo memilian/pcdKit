@@ -2,11 +2,12 @@
  * Created by memilian on 03/05/16.
  */
 
-import { inject } from 'aurelia-framework';
+import { inject, singleton} from 'aurelia-framework';
 import { MdToastService } from 'aurelia-materialize-bridge';
 import { EventAggregator } from 'aurelia-event-aggregator';
 import {Modal} from 'widgets/modal';
 
+@singleton()
 @inject(MdToastService, EventAggregator, Modal)
 export class SideNav{
 
@@ -21,20 +22,29 @@ export class SideNav{
     }
 
     newProject(){
-        ProjectManager.createProject(this.newName);
+        let proj = ProjectManager.createProject(this.newName);
+        this.loadProject(proj.name);
         this.newName = 'New Project';
     }
 
     deleteProject(name){
-        ProjectManager.deleteProject(name);
-        this.loadedProject = null;
+        this.modal.trigger({
+            header : "Warning",
+            content: "Really delete project "+name+" ? It will be lost forever ..."
+        }, function() {
+            if (name !== null) {
+                ProjectManager.deleteProject(name);
+                this.loadedProject = null;
+            }
+        }.bind(this));
     }
 
     newModule(){
+        this.newModuleName = this.loadedProject.getUniqueModuleName(this.newModuleName);
         let module = new Module(this.newModuleName);
         this.loadedProject.modules.push(module);
-        this.loadedProject.save();
         this.newModuleName = 'New Module';
+        this.loadModule(module);
     }
 
     deleteModule(module){
@@ -50,10 +60,13 @@ export class SideNav{
     }
 
     loadModule(module){
+        this.loadedProject.save();
         this.events.publish('module-loaded', module);
     }
 
     loadProject(name){
+        if(this.loadedProject != null)
+            this.loadedProject.save();
         let proj = ProjectManager.loadProject(name);
         if(proj === {}) proj = null;
         if(proj !== null)
@@ -61,6 +74,12 @@ export class SideNav{
         else
             this.toaster.show('Could not load '+proj.name,2000);
         this.loadedProject = proj;
+    }
+
+    detached(){
+        if(this.loadedProject!=null) {
+            this.loadedProject.save();
+        }
     }
 
     get projects(){

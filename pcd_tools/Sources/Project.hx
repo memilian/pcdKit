@@ -1,5 +1,10 @@
 package ;
 
+import js.RegExp;
+import haxe.ds.StringMap;
+import Lambda;
+using Lambda;
+
 @:expose
 class Project {
 
@@ -15,6 +20,32 @@ class Project {
     public function save():Void {
         this.date = Date.now();
         ProjectManager.saveProject(this);
+    }
+
+    public function getUniqueModuleName(name):String {
+        var i = 1;
+        var reg = new EReg("[^A-Z0-9-]", "gi");
+        name = reg.replace(name, '_');
+        var newName = name;
+        var ok = false;
+        while(!ok){
+            ok = true;
+            for(module in modules){
+                if(module.name == newName){
+                    ok = false;
+                    newName = name+'_$i';
+                    i++;
+                }
+            }
+        }
+        return newName;
+    }
+
+    public function getModuleNamed(name : String):Module {
+        for(module in modules){
+            if(module.name == name) return module;
+        }
+        return null;
     }
 
     public function getLastModule(): Module {

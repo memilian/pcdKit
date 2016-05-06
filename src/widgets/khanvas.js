@@ -17,6 +17,7 @@ export class Khanvas{
         this.time = Date.now();
         this.khanvas = document.createElement('canvas');
         this.khanvas.setAttribute('id', 'khanvas');
+        this.khanvas.setAttribute('style', 'height: 100%;width: 100%;');
         this.khanvas.width = 500;
         this.khanvas.height = 500;
     }
@@ -24,9 +25,7 @@ export class Khanvas{
     attached(){
         this.container.appendChild(this.khanvas);
         this.khanvas.style.opacity='1';
-        System.import("resources/kha").then(res => {
-            this.eva.publish('khanvas-attached');
-        });
+        System.import("resources/kha");
         console.log(this.time);
     }
     detached(){

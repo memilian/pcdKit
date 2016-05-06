@@ -2,7 +2,7 @@
     <div class="row">
         <ul md-collapsible="accordion: true;" class="col s12">
             <li >
-                <div class="collapsible-header accent-text"><i class="mdi-maps-place"></i>Projects</div>
+                <div class="collapsible-header accent-text"><i class="mdi-maps-place"></i>Projects <span class="right">${projects.length}</span></div>
                 <div class="collapsible-body">
                     <ul>
                         <li>
@@ -14,15 +14,15 @@
                                 <span class="btn-floating" click.delegate="newProject()"><i class="material-icons">create</i></span>
                             </div>
                         </li>
-                        <li repeat.for="project of projects" class="row" >
-                            <a href="#" click.trigger="loadProject(project)" class="col s10">${project}</a>
+                        <li repeat.for="project of projects" class="row valign-wrapper primary" >
+                            <a href="#" click.trigger="loadProject(project)" class="col s10 primary">${project}</a>
                             <span class="btn-floating red" click.delegate="deleteProject(project)"><i class="material-icons">delete</i></span>
                         </li>
                     </ul>
                 </div>
             </li>
             <li>
-                <div class="collapsible-header accent-text"><i class="mdi-maps-place"></i>Modules</div>
+                <div class="collapsible-header accent-text">Modules <span class="right">${loadedProject.modules.length}</span></div>
                 <div class="collapsible-body">
                     <ul show.bind="loadedProject!==null">
                         <li>
@@ -34,7 +34,7 @@
                                 <span class="btn-floating" click.delegate="newModule()"><i class="material-icons">create</i></span>
                             </div>
                         </li>
-                        <li repeat.for="module of loadedProject.modules" class="row" >
+                        <li repeat.for="module of loadedProject.modules" class="row" id="module_${module.name}">
                             <a href="#" click.trigger="loadModule(module)" class="col s10">${module.name}</a>
                             <span class="btn-floating red" click.delegate="deleteModule(module)"><i class="material-icons">delete</i></span>
                         </li>
