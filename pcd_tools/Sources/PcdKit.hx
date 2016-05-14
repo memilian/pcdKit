@@ -1,5 +1,8 @@
 package;
 
+import libnoise.operator.Translate;
+import libnoise.generator.Cylinder;
+import libnoise.generator.Sphere;
 import kha.ScreenRotation;
 import kha.Scaler;
 import TexGenActivity.TexGenMessage;
@@ -43,6 +46,7 @@ class PcdKit {
 	var texGenActivity : TexGenActivity;
 
 	public function new() {
+		PcdUtils.khaColorFromArray([1,2,3,1]); //fix broken @keep
 		the = this;
 		System.notifyOnRender(render);
 		Scheduler.addTimeTask(update, 0, 1 / 60);
@@ -50,10 +54,10 @@ class PcdKit {
 		PcdKit.events = untyped eventAggregator;
 		//PcdKit.events.subscribe('editor-attached', this.editorLoaded);
 		PcdKit.events.subscribe('code-changed', this.oncodechanged);
+		PcdKit.events.subscribe('options-changed', this.onoptionschanged);
 		this.editorLoaded();
 		parser = new Parser();
 		interp = new Interp();
-		gradient = earthGradient();
 		setupInterp();
 
 		Scheduler.addFrameTask(this.updateTexture,1);
@@ -78,9 +82,6 @@ class PcdKit {
 	var module : ModuleBase;
 	var texture : kha.Image;
 
-	var radius = 150;
-	var gradient : Gradient;
-
 	public function setupInterp():Void {
 		var perlin = new Perlin(0.003, 1.0, 0.5, 8,  321, HIGH);
 		module = new Billow(0.003, 1.0, 0.5, 8,  123, HIGH);
@@ -93,6 +94,8 @@ class PcdKit {
 		interp.variables.set("Perlin", libnoise.generator.Perlin);
 		interp.variables.set("RidgedMultifractal", libnoise.generator.RidgedMultifractal);
 		interp.variables.set("Voronoi", Voronoi);
+		interp.variables.set("Sphere", Sphere);
+		interp.variables.set("Cylinder", Cylinder);
 		interp.variables.set("Const", Const);
 
 		interp.variables.set("Add", libnoise.operator.Add);
@@ -108,6 +111,7 @@ class PcdKit {
 		interp.variables.set("Abs", Abs);
 		interp.variables.set("Invert", Invert);
 		interp.variables.set("Clamp", Clamp);
+		interp.variables.set("Translate", Translate);
 
 		interp.variables.set("_scaleNormedValue", function(value, newmin, newmax){
 			return value * newmax + newmin;
@@ -116,23 +120,18 @@ class PcdKit {
 
 	var textureDirty = false;
 	public function generateTexture():Void {
-		if(texture == null)
-			texture = kha.Image.createRenderTarget(Math.ceil(2*radius), Math.ceil(2*radius), TextureFormat.RGBA32, NoDepthAndStencil, 8);
-		mq.sender.send(Generate(module, gradient,radius, texture));
-		textureDirty = true;
-	}
 
-	public function earthGradient():Gradient {
-		var g = new Gradient();
-		g.add(0, Color.fromBytes(0,0,128,255));
-		g.add(0.4, Color.fromBytes(128,128,255,255));
-		g.add(0.5, Color.fromBytes(200,200,10,255));
-		g.add(0.501, Color.fromBytes(200,200,10,255));
-		g.add(0.512051, Color.fromBytes(10,128,10,255));
-		g.add(0.8, Color.fromBytes(255,200,128,255));
-		g.add(0.9, Color.fromBytes(96,96,96,255));
-		g.add(1.0, Color.fromBytes(255,255,255,255));
-		return g;
+		var options = ProjectManager.currentModule.options;
+
+		if(texture != null && (texture.width != options.size || texture.height != options.size)){
+			texture.unload();
+			texture = kha.Image.createRenderTarget(options.size, options.size, TextureFormat.RGBA32, NoDepthAndStencil, 8);
+		}
+		else if(texture == null)
+			texture = kha.Image.createRenderTarget(options.size, options.size, TextureFormat.RGBA32, NoDepthAndStencil, 8);
+
+		mq.sender.send(Generate(module, options, texture));
+		textureDirty = true;
 	}
 
 	var throttle = 0.3;
@@ -140,7 +139,15 @@ class PcdKit {
 	var codeDirty = false;
 	public function oncodechanged(infos):Void {
 		var module = ProjectManager.currentProject.getModuleNamed(infos.module.name);
+		if(module == null) return;
 		module.code = infos.code;
+		ProjectManager.currentProject.save();
+		lastChange = Scheduler.realTime();
+		codeDirty = true;
+	}
+
+	public function onoptionschanged(module):Void {
+		if(module == null) return;
 		ProjectManager.currentProject.save();
 		lastChange = Scheduler.realTime();
 		codeDirty = true;
@@ -180,7 +187,6 @@ class PcdKit {
 
 	function render(framebuffer: Framebuffer): Void {
 		if(texture == null) return;
-
 		var g = framebuffer.g2;
 		g.begin(true, Color.White);
 		Scaler.scale(texture,framebuffer, ScreenRotation.RotationNone);//g.drawImage(texture,100,100);

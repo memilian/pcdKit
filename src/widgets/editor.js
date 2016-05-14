@@ -40,10 +40,9 @@ export class Editor{
         }.bind(this));
 
         this.eva.subscribe('module-loaded', function(module){
-            console.log('module '+module.name+' loaded with code :'+module.code);
             if(module === undefined) module = null;
             this.module = module;
-            editor.getSession().getDocument().setValue(module.code);
+            editor.getSession().getDocument().setValue(module === null ? "" : module.code);
         }.bind(this));
     }
 

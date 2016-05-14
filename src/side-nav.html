@@ -4,18 +4,17 @@
             <li >
                 <div class="collapsible-header accent-text"><i class="mdi-maps-place"></i>Projects <span class="right">${projects.length}</span></div>
                 <div class="collapsible-body">
+                    <div class="input-field row">
+                        <div class="col s10">
+                            <input id="new_project" type="text" class="au-target" value.bind="newName" >
+                            <label class="fix-label" for="new_project">Project Name</label>
+                        </div>
+                        <span class="btn-floating" click.delegate="newProject()"><i class="material-icons">create</i></span>
+                    </div>
                     <ul>
-                        <li>
-                            <div class="input-field row">
-                                <div class="col s10">
-                                    <input id="new_project" type="text" class="au-target" value.bind="newName" au-target-id="102">
-                                    <label class="fix-label" for="new_project">Project Name</label>
-                                </div>
-                                <span class="btn-floating" click.delegate="newProject()"><i class="material-icons">create</i></span>
-                            </div>
-                        </li>
-                        <li repeat.for="project of projects" class="row valign-wrapper primary" >
-                            <a href="#" click.trigger="loadProject(project)" class="col s10 primary">${project}</a>
+                        <li repeat.for="project of projects" class="row valign-wrapper" >
+                            <i class="material-icons primary-text" show.bind="project == curProjectName">label</i>
+                            <a href="#" click.trigger="loadProject(project)" class="col s10">${project}</a>
                             <span class="btn-floating red" click.delegate="deleteProject(project)"><i class="material-icons">delete</i></span>
                         </li>
                     </ul>
@@ -23,20 +22,38 @@
             </li>
             <li>
                 <div class="collapsible-header accent-text">Modules <span class="right">${loadedProject.modules.length}</span></div>
-                <div class="collapsible-body">
+                <div class="collapsible-body" >
+                    <div class="input-field row" show.bind="loadedProject!==null">
+                        <div class="col s10">
+                            <input id="new_module" type="text" class="au-target" value.bind="newModuleName">
+                            <label class="fix-label" for="new_module">Module Name</label>
+                        </div>
+                        <span class="btn-floating" click.delegate="newModule()"><i class="material-icons">create</i></span>
+                    </div>
                     <ul show.bind="loadedProject!==null">
-                        <li>
-                            <div class="input-field row">
-                                <div class="col s10">
-                                    <input id="new_module" type="text" class="au-target" value.bind="newModuleName" au-target-id="102">
-                                    <label class="fix-label" for="new_module">Module Name</label>
-                                </div>
-                                <span class="btn-floating" click.delegate="newModule()"><i class="material-icons">create</i></span>
-                            </div>
-                        </li>
-                        <li repeat.for="module of loadedProject.modules" class="row" id="module_${module.name}">
+                        <li repeat.for="module of loadedProject.modules" class="row valign-wrapper" id="module_${module.name}">
+                            <i class="material-icons primary-text" show.bind="module.name == curModuleName">label</i>
                             <a href="#" click.trigger="loadModule(module)" class="col s10">${module.name}</a>
                             <span class="btn-floating red" click.delegate="deleteModule(module)"><i class="material-icons">delete</i></span>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+            <li>
+                <div class="collapsible-header accent-text">Gradients <span class="right">${loadedProject.gradients.length}</span></div>
+                <div class="collapsible-body" >
+                    <div class="input-field row" show.bind="loadedProject!==null">
+                        <div class="col s10">
+                            <input id="new_gradient" type="text" class="au-target" value.bind="newGradientName">
+                            <label class="fix-label" for="new_module">Gradient Name</label>
+                        </div>
+                        <span class="btn-floating" click.delegate="newGradient()"><i class="material-icons">create</i></span>
+                    </div>
+                    <ul show.bind="loadedProject!==null">
+                        <li repeat.for="gradient of loadedProject.gradients" class="row valign-wrapper" id="gradient_${gradient.name}">
+                            <i class="material-icons primary-text" show.bind="gradient.name == curGradientName">label</i>
+                            <a href="#" click.trigger="loadGradient(gradient)" class="col s10">${gradient.name}</a>
+                            <span class="btn-floating red" click.delegate="deleteGradient(gradient)"><i class="material-icons">delete</i></span>
                         </li>
                     </ul>
                 </div>

@@ -11,10 +11,13 @@ class Project {
     public var name (default, null): String;
     public var date (default, null): Date;
     public var modules (default, null): Array<Module> = [];
+    public var gradients (default, null): Array<Gradient> = [];
 
     public function new(name : String) {
         this.name = name;
         this.date = Date.now();
+        this.gradients.push(GradientPresets.grayScale());
+        this.gradients.push(GradientPresets.earthLike());
     }
 
     public function save():Void {
@@ -22,7 +25,7 @@ class Project {
         ProjectManager.saveProject(this);
     }
 
-    public function getUniqueModuleName(name):String {
+    private inline function getUniqueNameIn(name, array : Array<INamedItem>){
         var i = 1;
         var reg = new EReg("[^A-Z0-9-]", "gi");
         name = reg.replace(name, '_');
@@ -30,8 +33,8 @@ class Project {
         var ok = false;
         while(!ok){
             ok = true;
-            for(module in modules){
-                if(module.name == newName){
+            for(item in array){
+                if(item.name == newName){
                     ok = false;
                     newName = name+'_$i';
                     i++;
@@ -41,9 +44,24 @@ class Project {
         return newName;
     }
 
+    public function getUniqueModuleName(name : String):String {
+        return getUniqueNameIn(name, cast modules);
+    }
+
+    public function getUniqueGradientName(name : String):String {
+        return getUniqueNameIn(name, cast gradients);
+    }
+
     public function getModuleNamed(name : String):Module {
         for(module in modules){
             if(module.name == name) return module;
+        }
+        return null;
+    }
+
+    public function getGradientNamed(name : String):Gradient {
+        for(gradient in gradients){
+            if(gradient.name == name) return gradient;
         }
         return null;
     }

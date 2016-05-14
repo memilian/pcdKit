@@ -6,9 +6,10 @@
     <div class="ui-layout-center">
       <compose ref="editor" view-model.ref="editorVM"  view-model="widgets/editor"></compose>
     </div>
-    <div class="ui-layout-east" id="renderer-layout-container">
-      <div class="render-layout-north">
+    <div class="ui-layout-east" id="renderer-layout-container" style="overflow: visible !important;">
+      <div class="render-layout-north" style="overflow-y: scroll;">
         <!-- render options -->
+        <compose view-model="widgets/renderer-options"></compose>
       </div>
       <div class="render-layout-center">
         <compose ref="canvas"  view-model="widgets/khanvas"></compose>

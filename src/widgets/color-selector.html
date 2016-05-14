@@ -1,0 +1,32 @@
+<template bindable="type,color">
+    <span class="cp-selector" click.trigger="click()" css="background-color:${colorString};cursor:pointer;"><span/>
+    <div show.bind="active" ref="container" class="cp-container">
+            <canvas class="cp-main-canvas" ref="mainCanvas" width.bind="width" height.bind="height"></canvas>
+            <canvas class="cp-alpha-canvas" ref="alphaCanvas" width="40" height.bind="height"></canvas>
+            <button click.trigger="click()">ok</button>
+    </div>
+    <style>
+        .cp-alpha-canvas, .cp-main-canvas{
+            display: inline-block;
+            border: 1px solid black;
+        }
+        .cp-selector{
+            width:50px !important;
+            height:35px !important;
+            border: 1px solid black;
+            display: inline-block;
+        }
+        .cp-container{
+            padding:10px;
+            position:absolute;
+            border: 1px solid;
+            border-radius : 8px;
+            width:500px;
+            background-color:white;
+            z-index:999;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%,-50%);
+        }
+    </style>
+</template>

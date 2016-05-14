@@ -13,7 +13,12 @@ export class SideNav{
 
     loadedProject = null;
     newName = "New Project";
+    newGradientName = "New Gradient";
     newModuleName = "New Module";
+
+    curProjectName = "";
+    curModuleName = "";
+    curGradientName = "";
 
     constructor(toaster, events, modal){
         this.toaster = toaster;
@@ -25,6 +30,20 @@ export class SideNav{
         let proj = ProjectManager.createProject(this.newName);
         this.loadProject(proj.name);
         this.newName = 'New Project';
+    }
+
+    loadProject(name){
+        if(this.loadedProject != null)
+            this.loadedProject.save();
+        let proj = ProjectManager.loadProject(name);
+        if(proj === {}) proj = null;
+        if(proj !== null)
+            this.toaster.show(proj.name+' loaded', 1000);
+        else
+            this.toaster.show('Could not load '+proj.name,2000);
+        this.loadedProject = proj;
+        this.module = this.loadedProject.currentModule;
+        this.curProjectName = name;
     }
 
     deleteProject(name){
@@ -55,6 +74,7 @@ export class SideNav{
             if (module !== null) {
                 this.loadedProject.modules.splice(this.loadedProject.modules.indexOf(module), 1);
                 this.loadedProject.save();
+                this.events.publish('module-loaded', null);
             }
         }.bind(this));
     }
@@ -62,18 +82,34 @@ export class SideNav{
     loadModule(module){
         this.loadedProject.save();
         this.events.publish('module-loaded', module);
+        this.curModuleName = module.name;
     }
 
-    loadProject(name){
-        if(this.loadedProject != null)
-            this.loadedProject.save();
-        let proj = ProjectManager.loadProject(name);
-        if(proj === {}) proj = null;
-        if(proj !== null)
-            this.toaster.show(proj.name+' loaded', 2000);
-        else
-            this.toaster.show('Could not load '+proj.name,2000);
-        this.loadedProject = proj;
+    newGradient(){
+        this.newGradientName = this.loadedProject.getUniqueGradientName(this.newGradientName);
+        let gradient = new Gradient(this.newGradientName);
+        this.loadedProject.gradients.push(gradient);
+        this.newGradientName = 'New Gradient';
+        this.loadGradient(gradient);
+    }
+
+    deleteGradient(gradient){
+        this.modal.trigger({
+            header : "Warning",
+            content: "Really delete gradient "+gradient.name+" ? It will be lost forever ..."
+        }, function() {
+            if (gradient !== null) {
+                this.loadedProject.gradients.splice(this.loadedProject.gradients.indexOf(gradient), 1);
+                this.loadedProject.save();
+                this.events.publish('gradient-loaded', null);
+            }
+        }.bind(this));
+    }
+
+    loadGradient(gradient){
+        this.loadedProject.save();
+        this.events.publish('gradient-loaded', gradient);
+        this.curGradientName = gradient.name;
     }
 
     detached(){

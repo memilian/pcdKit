@@ -27,8 +27,7 @@ class ProjectManager {
         PcdKit.events.publish('project-loaded', project);
         currentModule = project.getLastModule();
         currentProject = project;
-        if(currentModule != null)
-            PcdKit.events.publish('module-loaded', currentModule);
+        PcdKit.events.publish('module-loaded', currentModule);
         return project;
     }
 

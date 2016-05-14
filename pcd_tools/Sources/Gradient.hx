@@ -6,11 +6,14 @@ import kha.Color;
 
 typedef ControlPoint = Tuple2<Float, Color>;
 
-class Gradient {
+@:expose
+class Gradient implements INamedItem{
 
     public var values:Array<ControlPoint> = [];
+    public var name(default, null) : String = "gradient";
 
-    public function new():Void {
+    public function new(name : String):Void {
+        this.name = name;
     }
 
     public function add(index:Float, color:Color):Void {

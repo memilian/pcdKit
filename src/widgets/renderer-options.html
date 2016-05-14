@@ -1,0 +1,36 @@
+<template >
+
+    <require from="value-converters/parse-int-value-converter"></require>
+    <require from="widgets/color-selector"></require>
+    <div show.bind="module!==null">
+        <div class="row valign-wrapper">
+            <div class="col s3">gradient :</div>
+            <select md-select md-select.ref="selectGradient" class="col s4" change.trigger="notifyDelayedChanges()" value.two-way="gradientName" style="z-index: 10;">
+                <option value="" disabled selected>select a gradient</option>
+                <option repeat.for="gradient of gradients" value.bind="gradient.name">${gradient.name}</option>
+            </select>
+        </div>
+        <div class="row valign-wrapper">
+            <div class="col s5">shape :</div>
+            <md-switch class="col s7" change.trigger="notifyChanges()" md-label-on="planet" md-label-off="regular" md-checked.bind="module.options.planetShape"></md-switch>
+        </div>
+        <div show.bind="module.options.planetShape">
+            <div class="row valign-wrapper">
+                <div class="col s5">atmosphere :</div>
+                <md-switch class="col s7" change.trigger="notifyDelayedChanges()" md-label-on="on" md-label-off="off" md-checked.bind="module.options.atmosphere"></md-switch>
+            </div>
+            <div class="row valign-wrapper">
+                <div class="col s7">atmosphere color :</div>
+                <color-selector class="col s5" color.two-way="atmoColor"  change.trigger="notifyDelayedChanges()"></color-selector>
+            </div>
+        </div>
+        <div class="row valign-wrapper">
+            <div class="col s7">background color :</div>
+            <color-selector class="col s5" color.two-way="backgroundColor" change.trigger="notifyDelayedChanges()"></color-selector>
+        </div>
+        <div class="row valign-wrapper">
+            <div class="col s3">size :</div>
+            <md-range class="col s9" change.trigger="notifyChanges()" md-value.bind="module.options.size | parseInt" md-min="16" md-max="1024" md-step="8"></md-range>
+        </div>
+    </div>
+</template>
