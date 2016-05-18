@@ -16,6 +16,14 @@ class PcdUtils {
         return [col.Rb, col.Gb, col.Bb, col.Ab];
     }
 
+    public static function colArrayToCss(col : Array<Int>){
+        return 'rgba(${col[0]}, ${col[1]}, ${col[2]}, ${col[3]/255})';
+    }
+
+    public static function khaColorToCss(col : kha.Color){
+        return 'rgba(${col.Rb}, ${col.Gb}, ${col.Bb}, ${col.Ab});';
+    }
+
     public static  function lerpColor(colA : kha.Color, colB : kha.Color, ratio : Float){
         var res = kha.Color.White;
         var ir = 1-ratio;

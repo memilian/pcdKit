@@ -1,0 +1,56 @@
+<template>
+    <require from="widgets/color-selector"></require>
+    <div class="row">
+        <span href="#" class="btn-floating" click.trigger="back()"><i class="fa fa-arrow-left"></i></span>
+    </div>
+    <div show.bind="gradient==null">
+        Select a gradient first
+    </div>
+    <div show.bind="gradient!==null" class="row">
+        <canvas width="60" height.bind="height" ref="mainCanvas"></canvas>
+        <div ref="handleContainer" class="handle-container">
+            <span repeat.for="point of points" data-point="point" class="point-handle" ref="elm" onload.bind="setupDrag(elm, point)" css="transform:translateY(${point.y}px)">
+                <color-selector color.bind="point.color" change.trigger="updateValue(point)"></color-selector>
+                <span>${point.value}</span>
+                <div class="grad-selector-line"></div>
+            </span>
+        </div>
+    </div>
+    <style>
+        .handle-container{
+            display: inline;
+        }
+        .grad-selector-line {
+            display: inline-block;
+            width: 60px;
+            height: 3px;
+            border: 1px solid black;
+            position: absolute;
+            top: 42%;
+            right: 100%;
+            z-index: 0;
+            -webkit-transition: width 0.4s;
+            -moz-transition: width 0.4s;
+            -ms-transition: width 0.4s;
+            -o-transition: width 0.4s;
+            transition: width 0.4s;
+            cursor: pointer;
+        }
+        .point-handle{
+            position: absolute;
+            -webkit-transition: margin 0.4s;
+            -moz-transition: margin 0.4s;
+            -ms-transition: margin 0.4s;
+            -o-transition: margin 0.4s;
+            transition: margin 0.4s;
+        }
+        .point-handle:hover{
+            margin-left: 10px;
+            z-index: 10;
+        }
+        .point-handle:hover > .grad-selector-line{
+            border: 2px solid dodgerblue;
+            width: 70px;
+        }
+    </style>
+</template>

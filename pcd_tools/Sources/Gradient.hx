@@ -18,6 +18,10 @@ class Gradient implements INamedItem{
 
     public function add(index:Float, color:Color):Void {
         values.push(new ControlPoint(index, color));
+        sort();
+    }
+
+    public function sort(){
         values.sort(function(a, b) {
             return a.left > b.left ? 1 : a.left == b.left ? 0 : -1;
         });

@@ -8,6 +8,7 @@ System.config({
     "resources/*": "resources/*",
     "theme-*": "ace/*"
   },
+
   map: {
     "ace": "github:ajaxorg/ace-builds@1.2.3",
     "aurelia-animator-css": "npm:aurelia-animator-css@1.0.0-beta.1.2.0",
@@ -28,6 +29,7 @@ System.config({
     "bootstrap": "github:twbs/bootstrap@3.3.6",
     "fetch": "github:github/fetch@0.11.0",
     "font-awesome": "npm:font-awesome@4.6.1",
+    "interactjs": "npm:interact.js@1.2.6",
     "jquery-layout": "github:quicklyfrozen/layout@1.4.4",
     "jquery-ui-draggable": "github:memilian/jquery-ui-draggable@master",
     "kha": "resources/kha",

@@ -5,7 +5,7 @@
     <div show.bind="module!==null">
         <div class="row valign-wrapper">
             <div class="col s3">gradient :</div>
-            <select md-select md-select.ref="selectGradient" class="col s4" change.trigger="notifyDelayedChanges()" value.two-way="gradientName" style="z-index: 10;">
+            <select md-select md-select.ref="selectGradient" class="col s5" change.trigger="notifyDelayedChanges()" value.two-way="gradientName" style="z-index: 10;">
                 <option value="" disabled selected>select a gradient</option>
                 <option repeat.for="gradient of gradients" value.bind="gradient.name">${gradient.name}</option>
             </select>

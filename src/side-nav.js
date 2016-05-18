@@ -83,6 +83,7 @@ export class SideNav{
         this.loadedProject.save();
         this.events.publish('module-loaded', module);
         this.curModuleName = module.name;
+        this.events.publish('editor-mode', "CODE");
     }
 
     newGradient(){
@@ -102,6 +103,7 @@ export class SideNav{
                 this.loadedProject.gradients.splice(this.loadedProject.gradients.indexOf(gradient), 1);
                 this.loadedProject.save();
                 this.events.publish('gradient-loaded', null);
+                this.events.publish('gradient-changed', null);
             }
         }.bind(this));
     }
@@ -109,6 +111,8 @@ export class SideNav{
     loadGradient(gradient){
         this.loadedProject.save();
         this.events.publish('gradient-loaded', gradient);
+        this.events.publish('gradient-changed', gradient);
+        this.events.publish('editor-mode', "GRADIENT");
         this.curGradientName = gradient.name;
     }
 

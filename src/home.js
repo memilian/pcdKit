@@ -2,10 +2,19 @@
 import 'jquery-ui-draggable';
 import 'jquery-layout';
 import 'jquery-layout/source/stable/plugins/jquery.layout.state';
+import {EventAggregator} from 'aurelia-event-aggregator';
+import {inject} from 'aurelia-framework';
 
+@inject(EventAggregator)
 export class Home {
 
-    constructor(){
+    editorMode="CODE";
+
+    constructor(eva){
+        this.eva = eva;
+        this.eva.subscribe('editor-mode', function(mode){
+            this.editorMode = mode;
+        }.bind(this));
     }
 
     attached(){
@@ -68,6 +77,7 @@ export class Home {
             }
         });
         $(window).trigger('resize');
+        this
     }
 
     detached(){

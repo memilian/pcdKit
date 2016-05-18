@@ -4,7 +4,9 @@
       <compose ref="sidenav" view-model="side-nav"></compose>
     </div>
     <div class="ui-layout-center">
-      <compose ref="editor" view-model.ref="editorVM"  view-model="widgets/editor"></compose>
+
+      <compose show.bind="editorMode=='CODE'"  ref="editor" view-model.ref="editorVM" view-model="widgets/editor"></compose>
+      <compose show.bind="editorMode=='GRADIENT'" ref="gradientEditor" view-model.ref="gradientVM" view-model="widgets/gradient-editor"></compose>
     </div>
     <div class="ui-layout-east" id="renderer-layout-container" style="overflow: visible !important;">
       <div class="render-layout-north" style="overflow-y: scroll;">

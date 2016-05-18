@@ -33,6 +33,14 @@ export class RendererOptions{
             this.project = proj;
             this.gradients = proj.gradients;
         }.bind(this));
+        this.eva.subscribe('refresh', function(proj){
+            this.selectGradient.refresh();
+            this.module.options.gradient = ProjectManager.currentProject.getGradientNamed(this.gradientName);
+        }.bind(this));
+
+        this.eva.subscribe('gradient-changed', function(){
+            this.selectGradient.refresh();
+        }.bind(this));
     }
 
     notifyDelayedChanges(){
@@ -41,7 +49,6 @@ export class RendererOptions{
             this.module.options.backgroundColor = PcdUtils.khaColorFromArray(this.backgroundColor);
             this.module.options.atmosphereColor = PcdUtils.khaColorFromArray(this.atmoColor);
             this.notifyChanges();
-            console.log("notif start", this.module.options.gradient.name);
         }.bind(this), 100);
     }
 

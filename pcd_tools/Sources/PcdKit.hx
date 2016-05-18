@@ -54,6 +54,7 @@ class PcdKit {
 		PcdKit.events = untyped eventAggregator;
 		//PcdKit.events.subscribe('editor-attached', this.editorLoaded);
 		PcdKit.events.subscribe('code-changed', this.oncodechanged);
+		PcdKit.events.subscribe('refresh', function(){this.onoptionschanged(ProjectManager.currentModule);});
 		PcdKit.events.subscribe('options-changed', this.onoptionschanged);
 		this.editorLoaded();
 		parser = new Parser();

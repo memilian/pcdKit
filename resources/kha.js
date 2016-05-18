@@ -257,6 +257,9 @@ Gradient.prototype = {
 	,name: null
 	,add: function(index,color) {
 		this.values.push({ _0 : index, _1 : color});
+		this.sort();
+	}
+	,sort: function() {
 		this.values.sort(function(a,b) {
 			if(a._0 > b._0) {
 				return 1;
@@ -835,6 +838,9 @@ var PcdKit = function() {
 	kha_Scheduler.addTimeTask($bind(this,this.update),0,0.0166666666666666664);
 	PcdKit.events = eventAggregator;
 	PcdKit.events.subscribe("code-changed",$bind(this,this.oncodechanged));
+	PcdKit.events.subscribe("refresh",function() {
+		_gthis.onoptionschanged(ProjectManager.currentModule);
+	});
 	PcdKit.events.subscribe("options-changed",$bind(this,this.onoptionschanged));
 	this.editorLoaded();
 	this.parser = new hscript_Parser();
@@ -1116,7 +1122,7 @@ PcdKit.prototype = {
 		} catch( exception ) {
 			haxe_CallStack.lastException = exception;
 			if (exception instanceof js__$Boot_HaxeError) exception = exception.val;
-			haxe_Log.trace(exception,{ fileName : "PcdKit.hx", lineNumber : 182, className : "PcdKit", methodName : "update"});
+			haxe_Log.trace(exception,{ fileName : "PcdKit.hx", lineNumber : 183, className : "PcdKit", methodName : "update"});
 		}
 	}
 	,render: function(framebuffer) {
@@ -1139,6 +1145,12 @@ PcdUtils.khaColorFromArray = function(cols) {
 };
 PcdUtils.khaColorToArray = function(col) {
 	return [kha__$Color_Color_$Impl_$.get_Rb(col),kha__$Color_Color_$Impl_$.get_Gb(col),kha__$Color_Color_$Impl_$.get_Bb(col),kha__$Color_Color_$Impl_$.get_Ab(col)];
+};
+PcdUtils.colArrayToCss = function(col) {
+	return "rgba(" + col[0] + ", " + col[1] + ", " + col[2] + ", " + col[3] / 255 + ")";
+};
+PcdUtils.khaColorToCss = function(col) {
+	return "rgba(" + kha__$Color_Color_$Impl_$.get_Rb(col) + ", " + kha__$Color_Color_$Impl_$.get_Gb(col) + ", " + kha__$Color_Color_$Impl_$.get_Bb(col) + ", " + kha__$Color_Color_$Impl_$.get_Ab(col) + ");";
 };
 PcdUtils.lerpColor = function(colA,colB,ratio) {
 	var res = kha__$Color_Color_$Impl_$.White;
@@ -1779,7 +1791,7 @@ TexGenActivity.prototype = {
 					g.drawRect(a,b,1,1);
 					continue;
 				}
-				var v = this.module.getValue($as,bs,this.options.planetShape?Math.sqrt(this.radius * this.radius - $as * $as - bs * bs):1);
+				var v = this.module.getValue($as,this.options.planetShape?Math.sqrt(this.radius * this.radius - $as * $as - bs * bs):1,bs);
 				var color = this.gradient.getColor((v < -1?-1:v > 1?1:v) / 2 + 0.5);
 				var atmoRatio = 1.;
 				var atmoSize = 0.05 * radSq;

@@ -61,7 +61,7 @@ class TexGenActivity {
                 var x = as;
                 var z = bs;
                 var y = options.planetShape ? Math.sqrt(radius * radius - as * as - bs * bs) : 1;//rad * Math.cos(theta);
-                var value:Float = thx.Floats.clamp(module.getValue(x, z, y), -1, 1) / 2 + 0.5;
+                var value:Float = thx.Floats.clamp(module.getValue(x, y, z), -1, 1) / 2 + 0.5;
                 var color = gradient.getColor(value);
 
                 var atmoRatio = 1.;
