@@ -10,4 +10,5 @@ project.addLibrary('compiletime');
 project.addParameter('-lib activity');
 project.addParameter('-dce no');
 project.addDefine('shallow-expose');
+project.addDefine('hscriptpos');
 return project;

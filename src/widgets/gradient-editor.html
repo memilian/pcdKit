@@ -6,15 +6,19 @@
     <div show.bind="gradient==null">
         Select a gradient first
     </div>
-    <div show.bind="gradient!==null" class="row">
+    <div show.bind="gradient!==null" class="center">
         <canvas width="60" height.bind="height" ref="mainCanvas"></canvas>
         <div ref="handleContainer" class="handle-container">
             <span repeat.for="point of points" data-point="point" class="point-handle" ref="elm" onload.bind="setupDrag(elm, point)" css="transform:translateY(${point.y}px)">
-                <color-selector color.bind="point.color" change.trigger="updateValue(point)"></color-selector>
+                <color-selector color.bind="point.color" change.trigger="updateValue(point)" ></color-selector>
                 <span>${point.value}</span>
                 <div class="grad-selector-line"></div>
+                <span href="#" class="btn-floating red remove-btn" click.trigger="removePoint(point)"><strong>-</strong></span>
             </span>
         </div>
+    </div>
+    <div class="center">
+        <span href="#" class="btn-floating" click.trigger="newPoint()"><strong>+</strong></span>
     </div>
     <style>
         .handle-container{
@@ -29,12 +33,13 @@
             top: 42%;
             right: 100%;
             z-index: 0;
-            -webkit-transition: width 0.4s;
-            -moz-transition: width 0.4s;
-            -ms-transition: width 0.4s;
-            -o-transition: width 0.4s;
-            transition: width 0.4s;
+            -webkit-transition: width 0.4s, opacity 0.4s;
+            -moz-transition: width 0.4s, opacity 0.4s;
+            -ms-transition: width 0.4s, opacity 0.4s;
+            -o-transition: width 0.4s, opacity 0.4s;
+            transition: width 0.4s, opacity 0.4s;
             cursor: pointer;
+            opacity: 0.4;
         }
         .point-handle{
             position: absolute;
@@ -51,6 +56,24 @@
         .point-handle:hover > .grad-selector-line{
             border: 2px solid dodgerblue;
             width: 70px;
+            opacity: 1;
+        }
+        .remove-btn{
+            margin-top: -25%;
+            opacity: 0;
+            -webkit-transition: all 0.4s;
+            -moz-transition: all 0.4s;
+            -ms-transition: all 0.4s;
+            -o-transition: all 0.4s;
+            transition: all 0.4s;
+        }
+        .point-handle:hover > .remove-btn{
+            opacity: 1;
+            -webkit-transition: all 0.4s;
+            -moz-transition: all 0.4s;
+            -ms-transition: all 0.4s;
+            -o-transition: all 0.4s;
+            transition: all 0.4s;
         }
     </style>
 </template>

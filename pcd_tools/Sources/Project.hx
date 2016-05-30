@@ -44,6 +44,7 @@ class Project {
         return newName;
     }
 
+
     public function getUniqueModuleName(name : String):String {
         return getUniqueNameIn(name, cast modules);
     }

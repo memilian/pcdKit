@@ -1,5 +1,9 @@
 package;
 
+import modules.CircleWrap;
+import modules.CircleWrap;
+import libnoise.operator.ScaleCoords;
+import libnoise.operator.Displace;
 import libnoise.operator.Translate;
 import libnoise.generator.Cylinder;
 import libnoise.generator.Sphere;
@@ -52,7 +56,6 @@ class PcdKit {
 		Scheduler.addTimeTask(update, 0, 1 / 60);
 
 		PcdKit.events = untyped eventAggregator;
-		//PcdKit.events.subscribe('editor-attached', this.editorLoaded);
 		PcdKit.events.subscribe('code-changed', this.oncodechanged);
 		PcdKit.events.subscribe('refresh', function(){this.onoptionschanged(ProjectManager.currentModule);});
 		PcdKit.events.subscribe('options-changed', this.onoptionschanged);
@@ -63,7 +66,9 @@ class PcdKit {
 
 		Scheduler.addFrameTask(this.updateTexture,1);
 		Activity.create(function(){texGenActivity = new TexGenActivity(mq);});
-		ProjectManager.getProjects();
+		var projects = ProjectManager.getProjects();
+		if(projects.length > 0)
+			ProjectManager.loadProject(projects[0]);
 	}
 
 	public function editorLoaded():Void {
@@ -112,7 +117,11 @@ class PcdKit {
 		interp.variables.set("Abs", Abs);
 		interp.variables.set("Invert", Invert);
 		interp.variables.set("Clamp", Clamp);
+		interp.variables.set("Displace", Displace);
 		interp.variables.set("Translate", Translate);
+		interp.variables.set("CircleWrap", CircleWrap);
+		interp.variables.set("ScaleCoords", ScaleCoords);
+
 
 		interp.variables.set("_scaleNormedValue", function(value, newmin, newmax){
 			return value * newmax + newmin;

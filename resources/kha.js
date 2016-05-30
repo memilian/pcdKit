@@ -259,6 +259,24 @@ Gradient.prototype = {
 		this.values.push({ _0 : index, _1 : color});
 		this.sort();
 	}
+	,remove: function(index) {
+		var i = 0;
+		var ri = -1;
+		var _g = 0;
+		var _g1 = this.values;
+		while(_g < _g1.length) {
+			var val = _g1[_g];
+			++_g;
+			if(val._0 == index) {
+				ri = i;
+			}
+			++i;
+		}
+		if(ri != -1) {
+			this.values.splice(ri,1);
+			this.sort();
+		}
+	}
 	,sort: function() {
 		this.values.sort(function(a,b) {
 			if(a._0 > b._0) {
@@ -289,6 +307,9 @@ Gradient.prototype = {
 				break;
 			}
 			++i;
+		}
+		if(high == null) {
+			return kha__$Color_Color_$Impl_$.Black;
 		}
 		if(low._1 == high._1) {
 			return low._1;
@@ -850,7 +871,10 @@ var PcdKit = function() {
 	activity_Activity.create(function() {
 		_gthis.texGenActivity = new TexGenActivity(_gthis.mq);
 	});
-	ProjectManager.getProjects();
+	var projects = ProjectManager.getProjects();
+	if(projects.length > 0) {
+		ProjectManager.loadProject(projects[0]);
+	}
 };
 $hxClasses["PcdKit"] = PcdKit;
 PcdKit.__name__ = ["PcdKit"];
@@ -1042,20 +1066,41 @@ PcdKit.prototype = {
 			_this22.h["Clamp"] = value22;
 		}
 		var _this23 = this.interp.variables;
-		var value23 = libnoise_operator_Translate;
-		if(__map_reserved.Translate != null) {
-			_this23.setReserved("Translate",value23);
+		var value23 = libnoise_operator_Displace;
+		if(__map_reserved.Displace != null) {
+			_this23.setReserved("Displace",value23);
 		} else {
-			_this23.h["Translate"] = value23;
+			_this23.h["Displace"] = value23;
 		}
 		var _this24 = this.interp.variables;
+		var value24 = libnoise_operator_Translate;
+		if(__map_reserved.Translate != null) {
+			_this24.setReserved("Translate",value24);
+		} else {
+			_this24.h["Translate"] = value24;
+		}
+		var _this25 = this.interp.variables;
+		var value25 = modules_CircleWrap;
+		if(__map_reserved.CircleWrap != null) {
+			_this25.setReserved("CircleWrap",value25);
+		} else {
+			_this25.h["CircleWrap"] = value25;
+		}
+		var _this26 = this.interp.variables;
+		var value26 = libnoise_operator_ScaleCoords;
+		if(__map_reserved.ScaleCoords != null) {
+			_this26.setReserved("ScaleCoords",value26);
+		} else {
+			_this26.h["ScaleCoords"] = value26;
+		}
+		var _this27 = this.interp.variables;
 		if(__map_reserved._scaleNormedValue != null) {
-			_this24.setReserved("_scaleNormedValue",function(value241,newmin1,newmax1) {
-				return value241 * newmax1 + newmin1;
+			_this27.setReserved("_scaleNormedValue",function(value271,newmin1,newmax1) {
+				return value271 * newmax1 + newmin1;
 			});
 		} else {
-			_this24.h["_scaleNormedValue"] = function(value241,newmin1,newmax1) {
-				return value241 * newmax1 + newmin1;
+			_this27.h["_scaleNormedValue"] = function(value271,newmin1,newmax1) {
+				return value271 * newmax1 + newmin1;
 			};
 		}
 	}
@@ -1122,7 +1167,7 @@ PcdKit.prototype = {
 		} catch( exception ) {
 			haxe_CallStack.lastException = exception;
 			if (exception instanceof js__$Boot_HaxeError) exception = exception.val;
-			haxe_Log.trace(exception,{ fileName : "PcdKit.hx", lineNumber : 183, className : "PcdKit", methodName : "update"});
+			haxe_Log.trace(exception,{ fileName : "PcdKit.hx", lineNumber : 192, className : "PcdKit", methodName : "update"});
 		}
 	}
 	,render: function(framebuffer) {
@@ -1748,7 +1793,22 @@ var TexGenActivity = function(mq) {
 			_gthis.size = options.size;
 			_gthis.options = options;
 			_gthis.radius = Math.ceil(_gthis.size / 2);
-			_gthis.currRow = 0;
+			if(options.planetShape) {
+				var builder = new builders_NoiseMapBuilderSphereByRow();
+				builder.sourceModule = _gthis.module;
+				builder.setDestSize(_gthis.size,_gthis.size);
+				builder.setBounds(-90,90,-180,180);
+				_gthis.noiseMapBuilder = builder;
+			} else {
+				var builder1 = new builders_NoiseMapBuilderPlaneByRow();
+				builder1.sourceModule = _gthis.module;
+				builder1.setDestSize(_gthis.size,_gthis.size);
+				builder1.setBounds(0,0,256,256);
+				builder1.isSeamlessEnabled = true;
+				_gthis.noiseMapBuilder = builder1;
+			}
+			_gthis.noiseMap = new libnoise_builder_NoiseMap(_gthis.size,_gthis.size);
+			_gthis.noiseMapBuilder.destNoiseMap = _gthis.noiseMap;
 			_gthis.texture = tex;
 			activity_CallMe.later($bind(_gthis,_gthis.process));
 			break;
@@ -1762,63 +1822,42 @@ TexGenActivity.__name__ = ["TexGenActivity"];
 TexGenActivity.prototype = {
 	sum: null
 	,mq: null
+	,noiseMapBuilder: null
+	,noiseMap: null
 	,module: null
 	,gradient: null
 	,size: null
 	,radius: null
-	,currRow: null
 	,options: null
 	,texture: null
 	,process: function() {
+		var _gthis = this;
 		try {
-			var g = this.texture.get_g2();
-			if(this.currRow == 0) {
-				g.begin(true,this.options.backgroundColor);
-			} else {
-				g.begin(false);
-			}
-			var radSq = this.radius * this.radius;
-			var b = this.currRow;
-			var _g1 = 0;
-			var _g = this.size;
-			while(_g1 < _g) {
-				var a = _g1++;
-				var $as = a - this.radius;
-				var bs = b - this.radius;
-				var pSq = $as * $as + bs * bs;
-				if(this.options.planetShape && pSq > radSq) {
-					g.set_color(kha__$Color_Color_$Impl_$.fromBytes(0,0,0,0));
-					g.drawRect(a,b,1,1);
-					continue;
-				}
-				var v = this.module.getValue($as,this.options.planetShape?Math.sqrt(this.radius * this.radius - $as * $as - bs * bs):1,bs);
-				var color = this.gradient.getColor((v < -1?-1:v > 1?1:v) / 2 + 0.5);
-				var atmoRatio = 1.;
-				var atmoSize = 0.05 * radSq;
-				if(this.options.planetShape && this.options.atmosphere && pSq > radSq - 2 * atmoSize) {
-					if(pSq >= radSq - atmoSize) {
-						atmoRatio = (radSq - pSq) / atmoSize;
-						color = PcdUtils.lerpColor(this.options.backgroundColor,this.options.atmosphereColor,atmoRatio);
-					} else {
-						atmoRatio = (radSq - pSq - atmoSize) / atmoSize;
-						color = PcdUtils.lerpColor(this.options.atmosphereColor,color,atmoRatio);
-					}
-				}
-				g.set_color(color);
-				g.drawRect(a,b,1,1);
-			}
-			g.end();
-			if(this.currRow++ < this.size) {
-				if(this.currRow % 2 == 0) {
-					activity_CallMe.soon($bind(this,this.process));
+			this.noiseMapBuilder.callback = function(row) {
+				var g = _gthis.texture.get_g2();
+				if(_gthis.noiseMapBuilder.curRow == 0) {
+					g.begin(true,_gthis.options.backgroundColor);
 				} else {
-					activity_CallMe.immediately($bind(this,this.process));
+					g.begin(false);
 				}
+				var _g1 = 0;
+				var _g = _gthis.size;
+				while(_g1 < _g) {
+					var x = _g1++;
+					var _this = _gthis.noiseMap;
+					var value = x >= 0 && x <= _this.width && row >= 0 && row <= _this.height?_this.values[x + _this.width * row]:_this.borderValue;
+					g.set_color(_gthis.gradient.getColor((value < -1?-1:value > 1?1:value) / 2 + 0.5));
+					g.drawRect(x,row,1,1);
+				}
+				g.end();
+			};
+			if(!this.noiseMapBuilder.buildNext()) {
+				activity_CallMe.soon($bind(this,this.process));
 			}
 		} catch( ex ) {
 			haxe_CallStack.lastException = ex;
 			if (ex instanceof js__$Boot_HaxeError) ex = ex.val;
-			haxe_Log.trace(ex,{ fileName : "TexGenActivity.hx", lineNumber : 93, className : "TexGenActivity", methodName : "process"});
+			haxe_Log.trace(ex,{ fileName : "TexGenActivity.hx", lineNumber : 134, className : "TexGenActivity", methodName : "process"});
 		}
 	}
 	,__class__: TexGenActivity
@@ -3363,6 +3402,287 @@ activity_impl__$TimerScheduler_RunTimer.prototype = $extend(haxe_Timer.prototype
 		activity_impl_TimerScheduler.runOnce();
 	}
 	,__class__: activity_impl__$TimerScheduler_RunTimer
+});
+var builders_IRowBuilder = function() {
+	this.curRow = 0;
+};
+$hxClasses["builders.IRowBuilder"] = builders_IRowBuilder;
+builders_IRowBuilder.__name__ = ["builders","IRowBuilder"];
+builders_IRowBuilder.prototype = {
+	curRow: null
+	,buildNext: null
+	,__class__: builders_IRowBuilder
+};
+var libnoise_builder_NoiseMapBuilder = function() {
+};
+$hxClasses["libnoise.builder.NoiseMapBuilder"] = libnoise_builder_NoiseMapBuilder;
+libnoise_builder_NoiseMapBuilder.__name__ = ["libnoise","builder","NoiseMapBuilder"];
+libnoise_builder_NoiseMapBuilder.prototype = {
+	destHeight: null
+	,destWidth: null
+	,destNoiseMap: null
+	,sourceModule: null
+	,callback: null
+	,build: function() {
+	}
+	,setDestSize: function(width,heigth) {
+		this.destWidth = width;
+		this.destHeight = heigth;
+	}
+	,__class__: libnoise_builder_NoiseMapBuilder
+};
+var libnoise_builder_NoiseMapBuilderPlane = function() {
+	libnoise_builder_NoiseMapBuilder.call(this);
+};
+$hxClasses["libnoise.builder.NoiseMapBuilderPlane"] = libnoise_builder_NoiseMapBuilderPlane;
+libnoise_builder_NoiseMapBuilderPlane.__name__ = ["libnoise","builder","NoiseMapBuilderPlane"];
+libnoise_builder_NoiseMapBuilderPlane.__super__ = libnoise_builder_NoiseMapBuilder;
+libnoise_builder_NoiseMapBuilderPlane.prototype = $extend(libnoise_builder_NoiseMapBuilder.prototype,{
+	lowerXBound: null
+	,lowerZBound: null
+	,upperXBound: null
+	,upperZBound: null
+	,isSeamlessEnabled: null
+	,setBounds: function(lowerXBound,lowerZBound,upperXBound,upperZBound) {
+		if(lowerXBound >= upperXBound || lowerZBound >= upperZBound) {
+			throw new js__$Boot_HaxeError("Invalid parameter");
+		}
+		this.lowerZBound = lowerZBound;
+		this.lowerXBound = lowerXBound;
+		this.upperZBound = upperZBound;
+		this.upperXBound = upperXBound;
+	}
+	,build: function() {
+		if(this.upperXBound <= this.lowerXBound || this.upperZBound <= this.lowerZBound || this.destWidth <= 0 || this.destHeight <= 0 || this.sourceModule == null || this.destNoiseMap == null) {
+			throw new js__$Boot_HaxeError("Invalid parameter");
+		}
+		var plane_module = this.sourceModule;
+		var xExtent = this.upperXBound - this.lowerXBound;
+		var zExtent = this.upperZBound - this.lowerZBound;
+		var xDelta = xExtent / this.destWidth;
+		var zDelta = zExtent / this.destHeight;
+		var xCur = this.lowerXBound;
+		var zCur = this.lowerZBound;
+		var _g1 = 0;
+		var _g = this.destHeight;
+		while(_g1 < _g) {
+			var z = _g1++;
+			xCur = this.lowerXBound;
+			var _g3 = 0;
+			var _g2 = this.destWidth;
+			while(_g3 < _g2) {
+				var x = _g3++;
+				var curValue;
+				if(!this.isSeamlessEnabled) {
+					curValue = plane_module.getValue(x,0,z);
+				} else {
+					var swValue = plane_module.getValue(xCur,0,zCur);
+					var seValue = plane_module.getValue(xCur + xExtent,0,zCur);
+					var nwValue = plane_module.getValue(xCur,0,zCur + zExtent);
+					var neValue = plane_module.getValue(xCur + xExtent,0,zCur + zExtent);
+					var xBlend = 1.0 - (xCur - this.lowerXBound) / xExtent;
+					var zBlend = 1.0 - (zCur - this.lowerZBound) / zExtent;
+					curValue = (1.0 - zBlend) * ((1.0 - xBlend) * swValue + xBlend * seValue) + zBlend * ((1.0 - xBlend) * nwValue + xBlend * neValue);
+				}
+				var _this = this.destNoiseMap;
+				if(x >= 0 && x <= _this.width && z >= 0 && z <= _this.height) {
+					_this.values[x + _this.width * z] = curValue;
+				}
+				xCur += xDelta;
+			}
+			zCur += zDelta;
+			if(this.callback != null) {
+				this.callback(z);
+			}
+		}
+	}
+	,__class__: libnoise_builder_NoiseMapBuilderPlane
+});
+var builders_NoiseMapBuilderPlaneByRow = function() {
+	this.curRow = 0;
+	libnoise_builder_NoiseMapBuilderPlane.call(this);
+};
+$hxClasses["builders.NoiseMapBuilderPlaneByRow"] = builders_NoiseMapBuilderPlaneByRow;
+builders_NoiseMapBuilderPlaneByRow.__name__ = ["builders","NoiseMapBuilderPlaneByRow"];
+builders_NoiseMapBuilderPlaneByRow.__interfaces__ = [builders_IRowBuilder];
+builders_NoiseMapBuilderPlaneByRow.__super__ = libnoise_builder_NoiseMapBuilderPlane;
+builders_NoiseMapBuilderPlaneByRow.prototype = $extend(libnoise_builder_NoiseMapBuilderPlane.prototype,{
+	curRow: null
+	,plane: null
+	,xExtent: null
+	,zExtent: null
+	,xDelta: null
+	,zDelta: null
+	,xCur: null
+	,zCur: null
+	,initialize: function() {
+		this.plane = new libnoise_model_Plane(this.sourceModule);
+		this.xExtent = this.upperXBound - this.lowerXBound;
+		this.zExtent = this.upperZBound - this.lowerZBound;
+		this.xDelta = this.xExtent / this.destWidth;
+		this.zDelta = this.zExtent / this.destHeight;
+		this.xCur = this.lowerXBound;
+		this.zCur = this.lowerZBound;
+	}
+	,buildNext: function() {
+		if(this.upperXBound <= this.lowerXBound || this.upperZBound <= this.lowerZBound || this.destWidth <= 0 || this.destHeight <= 0 || this.sourceModule == null || this.destNoiseMap == null) {
+			throw new js__$Boot_HaxeError("Invalid parameter");
+		}
+		if(this.curRow >= this.destHeight) {
+			return true;
+		}
+		if(this.curRow == 0) {
+			this.initialize();
+		}
+		this.zCur = this.curRow * this.zDelta;
+		this.xCur = this.lowerXBound;
+		var _g1 = 0;
+		var _g = this.destWidth;
+		while(_g1 < _g) {
+			var x = _g1++;
+			var curValue;
+			if(!this.isSeamlessEnabled) {
+				curValue = this.plane.module.getValue(x,0,this.curRow);
+			} else {
+				var swValue = this.plane.module.getValue(this.xCur,0,this.zCur);
+				var seValue = this.plane.module.getValue(this.xCur + this.xExtent,0,this.zCur);
+				var nwValue = this.plane.module.getValue(this.xCur,0,this.zCur + this.zExtent);
+				var neValue = this.plane.module.getValue(this.xCur + this.xExtent,0,this.zCur + this.zExtent);
+				var xBlend = 1.0 - (this.xCur - this.lowerXBound) / this.xExtent;
+				var zBlend = 1.0 - (this.zCur - this.lowerZBound) / this.zExtent;
+				curValue = (1.0 - zBlend) * ((1.0 - xBlend) * swValue + xBlend * seValue) + zBlend * ((1.0 - xBlend) * nwValue + xBlend * neValue);
+			}
+			var _this = this.destNoiseMap;
+			var y = this.curRow;
+			if(x >= 0 && x <= _this.width && y >= 0 && y <= _this.height) {
+				_this.values[x + _this.width * y] = curValue;
+			}
+			this.xCur += this.xDelta;
+		}
+		if(this.callback != null) {
+			this.callback(this.curRow);
+		}
+		this.curRow++;
+		return false;
+	}
+	,__class__: builders_NoiseMapBuilderPlaneByRow
+});
+var libnoise_builder_NoiseMapBuilderSphere = function() {
+	libnoise_builder_NoiseMapBuilder.call(this);
+};
+$hxClasses["libnoise.builder.NoiseMapBuilderSphere"] = libnoise_builder_NoiseMapBuilderSphere;
+libnoise_builder_NoiseMapBuilderSphere.__name__ = ["libnoise","builder","NoiseMapBuilderSphere"];
+libnoise_builder_NoiseMapBuilderSphere.__super__ = libnoise_builder_NoiseMapBuilder;
+libnoise_builder_NoiseMapBuilderSphere.prototype = $extend(libnoise_builder_NoiseMapBuilder.prototype,{
+	eastLonBound: null
+	,northLatBound: null
+	,southLatBound: null
+	,westLonBound: null
+	,setBounds: function(southLatBound,northLatBound,westLonBound,eastLonBound) {
+		if(southLatBound >= northLatBound || westLonBound >= eastLonBound) {
+			throw new js__$Boot_HaxeError("Invalid parameter");
+		}
+		this.southLatBound = southLatBound;
+		this.northLatBound = northLatBound;
+		this.westLonBound = westLonBound;
+		this.eastLonBound = eastLonBound;
+	}
+	,build: function() {
+		if(this.eastLonBound <= this.westLonBound || this.northLatBound <= this.southLatBound || this.destWidth <= 0 || this.destHeight <= 0 || this.sourceModule == null || this.destNoiseMap == null) {
+			throw new js__$Boot_HaxeError("Invalid parameter");
+		}
+		var sphere_module = this.sourceModule;
+		var lonExtent = this.eastLonBound - this.westLonBound;
+		var latExtent = this.northLatBound - this.southLatBound;
+		var xDelta = lonExtent / this.destWidth;
+		var yDelta = latExtent / this.destHeight;
+		var curLon = this.westLonBound;
+		var curLat = this.southLatBound;
+		var _g1 = 0;
+		var _g = this.destHeight;
+		while(_g1 < _g) {
+			var y = _g1++;
+			curLon = this.westLonBound;
+			var _g3 = 0;
+			var _g2 = this.destWidth;
+			while(_g3 < _g2) {
+				var x = _g3++;
+				var r = Math.cos(0.017 * curLat);
+				var curValue = sphere_module.getValue(r * Math.cos(0.017 * curLon),Math.sin(0.017 * curLat),r * Math.sin(0.017 * curLon));
+				var _this = this.destNoiseMap;
+				if(x >= 0 && x <= _this.width && y >= 0 && y <= _this.height) {
+					_this.values[x + _this.width * y] = curValue;
+				}
+				curLon += xDelta;
+			}
+			curLat += yDelta;
+			if(this.callback != null) {
+				this.callback(y);
+			}
+		}
+	}
+	,__class__: libnoise_builder_NoiseMapBuilderSphere
+});
+var builders_NoiseMapBuilderSphereByRow = function() {
+	this.curRow = 0;
+	libnoise_builder_NoiseMapBuilderSphere.call(this);
+};
+$hxClasses["builders.NoiseMapBuilderSphereByRow"] = builders_NoiseMapBuilderSphereByRow;
+builders_NoiseMapBuilderSphereByRow.__name__ = ["builders","NoiseMapBuilderSphereByRow"];
+builders_NoiseMapBuilderSphereByRow.__interfaces__ = [builders_IRowBuilder];
+builders_NoiseMapBuilderSphereByRow.__super__ = libnoise_builder_NoiseMapBuilderSphere;
+builders_NoiseMapBuilderSphereByRow.prototype = $extend(libnoise_builder_NoiseMapBuilderSphere.prototype,{
+	curRow: null
+	,sphere: null
+	,lonExtent: null
+	,latExtent: null
+	,xDelta: null
+	,yDelta: null
+	,curLon: null
+	,curLat: null
+	,initialize: function() {
+		this.sphere = new libnoise_model_Sphere(this.sourceModule);
+		this.lonExtent = this.eastLonBound - this.westLonBound;
+		this.latExtent = this.northLatBound - this.southLatBound;
+		this.xDelta = this.lonExtent / this.destWidth;
+		this.yDelta = this.latExtent / this.destHeight;
+		this.curLon = this.westLonBound;
+		this.curLat = this.southLatBound;
+	}
+	,buildNext: function() {
+		if(this.eastLonBound <= this.westLonBound || this.northLatBound <= this.southLatBound || this.destWidth <= 0 || this.destHeight <= 0 || this.sourceModule == null || this.destNoiseMap == null) {
+			throw new js__$Boot_HaxeError("Invalid parameter");
+		}
+		if(this.curRow >= this.destHeight) {
+			return true;
+		}
+		if(this.curRow == 0) {
+			this.initialize();
+		}
+		this.curLat = this.southLatBound + this.curRow * this.yDelta;
+		this.curLon = this.westLonBound;
+		var _g1 = 0;
+		var _g = this.destWidth;
+		while(_g1 < _g) {
+			var x = _g1++;
+			var lat = this.curLat;
+			var lon = this.curLon;
+			var r = Math.cos(0.017 * lat);
+			var curValue = this.sphere.module.getValue(r * Math.cos(0.017 * lon),Math.sin(0.017 * lat),r * Math.sin(0.017 * lon));
+			var _this = this.destNoiseMap;
+			var y = this.curRow;
+			if(x >= 0 && x <= _this.width && y >= 0 && y <= _this.height) {
+				_this.values[x + _this.width * y] = curValue;
+			}
+			this.curLon += this.xDelta;
+		}
+		if(this.callback != null) {
+			this.callback(this.curRow);
+		}
+		this.curRow++;
+		return false;
+	}
+	,__class__: builders_NoiseMapBuilderSphereByRow
 });
 var haxe_StackItem = $hxClasses["haxe.StackItem"] = { __ename__ : ["haxe","StackItem"], __constructs__ : ["CFunction","Module","FilePos","Method","LocalFunction"] };
 haxe_StackItem.CFunction = ["CFunction",0];
@@ -28305,25 +28625,58 @@ libnoise_Utils.GradientCoherentNoise3D = function(x,y,z,seed,quality) {
 		zs = value2 * value2 * (3.0 - 2.0 * value2);
 		break;
 	case 2:
-		xs = libnoise_Utils.MapQuinticSCurve(x - x0);
-		ys = libnoise_Utils.MapQuinticSCurve(y - y0);
-		zs = libnoise_Utils.MapQuinticSCurve(z - z0);
+		var value3 = x - x0;
+		var a3 = value3 * value3 * value3;
+		var a4 = a3 * value3;
+		xs = 6.0 * (a4 * value3) - 15.0 * a4 + 10.0 * a3;
+		var value4 = y - y0;
+		var a31 = value4 * value4 * value4;
+		var a41 = a31 * value4;
+		ys = 6.0 * (a41 * value4) - 15.0 * a41 + 10.0 * a31;
+		var value5 = z - z0;
+		var a32 = value5 * value5 * value5;
+		var a42 = a32 * value5;
+		zs = 6.0 * (a42 * value5) - 15.0 * a42 + 10.0 * a32;
 		break;
 	}
-	var n0 = libnoise_Utils.GradientNoise3D(x,y,z,x0,y0,z0,seed);
-	var n1 = libnoise_Utils.GradientNoise3D(x,y,z,x1,y0,z0,seed);
-	var ix0 = libnoise_Utils.InterpolateLinear(n0,n1,xs);
-	n0 = libnoise_Utils.GradientNoise3D(x,y,z,x0,y1,z0,seed);
-	n1 = libnoise_Utils.GradientNoise3D(x,y,z,x1,y1,z0,seed);
-	var ix1 = libnoise_Utils.InterpolateLinear(n0,n1,xs);
-	var iy0 = libnoise_Utils.InterpolateLinear(ix0,ix1,ys);
-	n0 = libnoise_Utils.GradientNoise3D(x,y,z,x0,y0,z1,seed);
-	n1 = libnoise_Utils.GradientNoise3D(x,y,z,x1,y0,z1,seed);
-	ix0 = libnoise_Utils.InterpolateLinear(n0,n1,xs);
-	n0 = libnoise_Utils.GradientNoise3D(x,y,z,x0,y1,z1,seed);
-	n1 = libnoise_Utils.GradientNoise3D(x,y,z,x1,y1,z1,seed);
-	ix1 = libnoise_Utils.InterpolateLinear(n0,n1,xs);
-	return libnoise_Utils.InterpolateLinear(iy0,libnoise_Utils.InterpolateLinear(ix0,ix1,ys),zs);
+	var i = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * seed & -1;
+	i ^= i >> libnoise_Utils.GeneratorShift;
+	i &= 255;
+	var n0 = (libnoise_Utils.Randoms[i << 2] * (x - x0) + libnoise_Utils.Randoms[(i << 2) + 1] * (y - y0) + libnoise_Utils.Randoms[(i << 2) + 2] * (z - z0)) * 2.12;
+	var i1 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * seed & -1;
+	i1 ^= i1 >> libnoise_Utils.GeneratorShift;
+	i1 &= 255;
+	var n1 = (libnoise_Utils.Randoms[i1 << 2] * (x - x1) + libnoise_Utils.Randoms[(i1 << 2) + 1] * (y - y0) + libnoise_Utils.Randoms[(i1 << 2) + 2] * (z - z0)) * 2.12;
+	var ix0 = (1.0 - xs) * n0 + xs * n1;
+	var i2 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * seed & -1;
+	i2 ^= i2 >> libnoise_Utils.GeneratorShift;
+	i2 &= 255;
+	n0 = (libnoise_Utils.Randoms[i2 << 2] * (x - x0) + libnoise_Utils.Randoms[(i2 << 2) + 1] * (y - y1) + libnoise_Utils.Randoms[(i2 << 2) + 2] * (z - z0)) * 2.12;
+	var i3 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * seed & -1;
+	i3 ^= i3 >> libnoise_Utils.GeneratorShift;
+	i3 &= 255;
+	n1 = (libnoise_Utils.Randoms[i3 << 2] * (x - x1) + libnoise_Utils.Randoms[(i3 << 2) + 1] * (y - y1) + libnoise_Utils.Randoms[(i3 << 2) + 2] * (z - z0)) * 2.12;
+	var ix1 = (1.0 - xs) * n0 + xs * n1;
+	var iy0 = (1.0 - ys) * ix0 + ys * ix1;
+	var i4 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * seed & -1;
+	i4 ^= i4 >> libnoise_Utils.GeneratorShift;
+	i4 &= 255;
+	n0 = (libnoise_Utils.Randoms[i4 << 2] * (x - x0) + libnoise_Utils.Randoms[(i4 << 2) + 1] * (y - y0) + libnoise_Utils.Randoms[(i4 << 2) + 2] * (z - z1)) * 2.12;
+	var i5 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * seed & -1;
+	i5 ^= i5 >> libnoise_Utils.GeneratorShift;
+	i5 &= 255;
+	n1 = (libnoise_Utils.Randoms[i5 << 2] * (x - x1) + libnoise_Utils.Randoms[(i5 << 2) + 1] * (y - y0) + libnoise_Utils.Randoms[(i5 << 2) + 2] * (z - z1)) * 2.12;
+	ix0 = (1.0 - xs) * n0 + xs * n1;
+	var i6 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * seed & -1;
+	i6 ^= i6 >> libnoise_Utils.GeneratorShift;
+	i6 &= 255;
+	n0 = (libnoise_Utils.Randoms[i6 << 2] * (x - x0) + libnoise_Utils.Randoms[(i6 << 2) + 1] * (y - y1) + libnoise_Utils.Randoms[(i6 << 2) + 2] * (z - z1)) * 2.12;
+	var i7 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * seed & -1;
+	i7 ^= i7 >> libnoise_Utils.GeneratorShift;
+	i7 &= 255;
+	n1 = (libnoise_Utils.Randoms[i7 << 2] * (x - x1) + libnoise_Utils.Randoms[(i7 << 2) + 1] * (y - y1) + libnoise_Utils.Randoms[(i7 << 2) + 2] * (z - z1)) * 2.12;
+	ix1 = (1.0 - xs) * n0 + xs * n1;
+	return (1.0 - zs) * iy0 + zs * ((1.0 - ys) * ix0 + ys * ix1);
 };
 libnoise_Utils.GradientNoise3D = function(fx,fy,fz,ix,iy,iz,seed) {
 	var i = libnoise_Utils.GeneratorNoiseX * ix + libnoise_Utils.GeneratorNoiseY * iy + libnoise_Utils.GeneratorNoiseZ * iz + libnoise_Utils.GeneratorSeed * seed & -1;
@@ -28375,6 +28728,41 @@ libnoise_Utils.Clamp = function(value,min,max) {
 		return value;
 	}
 };
+libnoise_Utils.Clampf = function(value,min,max) {
+	if(value < min) {
+		return min;
+	} else if(value > max) {
+		return max;
+	} else {
+		return value;
+	}
+};
+var libnoise_builder_NoiseMap = function(width,height) {
+	this.values = [];
+	this.borderValue = 0;
+	this.width = width;
+	this.height = height;
+};
+$hxClasses["libnoise.builder.NoiseMap"] = libnoise_builder_NoiseMap;
+libnoise_builder_NoiseMap.__name__ = ["libnoise","builder","NoiseMap"];
+libnoise_builder_NoiseMap.prototype = {
+	width: null
+	,height: null
+	,borderValue: null
+	,values: null
+	,setValue: function(x,y,value) {
+		if(x >= 0 && x <= this.width && y >= 0 && y <= this.height) {
+			this.values[x + this.width * y] = value;
+		}
+	}
+	,getValue: function(x,y) {
+		if(x >= 0 && x <= this.width && y >= 0 && y <= this.height) {
+			return this.values[x + this.width * y];
+		}
+		return this.borderValue;
+	}
+	,__class__: libnoise_builder_NoiseMap
+};
 var libnoise_generator_Billow = function(frequency,lacunarity,persistence,octaves,seed,quality) {
 	this.frequency = frequency;
 	this.lacunarity = lacunarity;
@@ -28403,7 +28791,87 @@ libnoise_generator_Billow.prototype = $extend(libnoise_ModuleBase.prototype,{
 		var _g1 = 0;
 		var _g = this.octaves;
 		while(_g1 < _g) {
-			var signal = libnoise_Utils.GradientCoherentNoise3D(libnoise_Utils.MakeInt32Range(x),libnoise_Utils.MakeInt32Range(y),libnoise_Utils.MakeInt32Range(z),this.seed + _g1++ & -1,this.quality);
+			var i = _g1++;
+			var nx = x >= 1073741824.0?2.0 * (x - (x / 1073741824.0 | 0) * 1073741824.0) - 1073741824.0:x <= -1073741824.0?2.0 * (x - (x / 1073741824.0 | 0) * 1073741824.0) + 1073741824.0:x;
+			var ny = y >= 1073741824.0?2.0 * (y - (y / 1073741824.0 | 0) * 1073741824.0) - 1073741824.0:y <= -1073741824.0?2.0 * (y - (y / 1073741824.0 | 0) * 1073741824.0) + 1073741824.0:y;
+			var nz = z >= 1073741824.0?2.0 * (z - (z / 1073741824.0 | 0) * 1073741824.0) - 1073741824.0:z <= -1073741824.0?2.0 * (z - (z / 1073741824.0 | 0) * 1073741824.0) + 1073741824.0:z;
+			var _seed = this.seed + i & -1;
+			var x0 = nx > 0.0?nx | 0:(nx | 0) - 1;
+			var x1 = x0 + 1;
+			var y0 = ny > 0.0?ny | 0:(ny | 0) - 1;
+			var y1 = y0 + 1;
+			var z0 = nz > 0.0?nz | 0:(nz | 0) - 1;
+			var z1 = z0 + 1;
+			var xs = 0.0;
+			var ys = 0.0;
+			var zs = 0.0;
+			switch(this.quality[1]) {
+			case 0:
+				xs = nx - x0;
+				ys = ny - y0;
+				zs = nz - z0;
+				break;
+			case 1:
+				var value1 = nx - x0;
+				xs = value1 * value1 * (3.0 - 2.0 * value1);
+				var value2 = ny - y0;
+				ys = value2 * value2 * (3.0 - 2.0 * value2);
+				var value3 = nz - z0;
+				zs = value3 * value3 * (3.0 - 2.0 * value3);
+				break;
+			case 2:
+				var value4 = nx - x0;
+				var a3 = value4 * value4 * value4;
+				var a4 = a3 * value4;
+				xs = 6.0 * (a4 * value4) - 15.0 * a4 + 10.0 * a3;
+				var value5 = ny - y0;
+				var a31 = value5 * value5 * value5;
+				var a41 = a31 * value5;
+				ys = 6.0 * (a41 * value5) - 15.0 * a41 + 10.0 * a31;
+				var value6 = nz - z0;
+				var a32 = value6 * value6 * value6;
+				var a42 = a32 * value6;
+				zs = 6.0 * (a42 * value6) - 15.0 * a42 + 10.0 * a32;
+				break;
+			}
+			var i1 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i1 ^= i1 >> libnoise_Utils.GeneratorShift;
+			i1 &= 255;
+			var n0 = (libnoise_Utils.Randoms[i1 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i1 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i1 << 2) + 2] * (nz - z0)) * 2.12;
+			var i2 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i2 ^= i2 >> libnoise_Utils.GeneratorShift;
+			i2 &= 255;
+			var n1 = (libnoise_Utils.Randoms[i2 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i2 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i2 << 2) + 2] * (nz - z0)) * 2.12;
+			var ix0 = (1.0 - xs) * n0 + xs * n1;
+			var i3 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i3 ^= i3 >> libnoise_Utils.GeneratorShift;
+			i3 &= 255;
+			n0 = (libnoise_Utils.Randoms[i3 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i3 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i3 << 2) + 2] * (nz - z0)) * 2.12;
+			var i4 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i4 ^= i4 >> libnoise_Utils.GeneratorShift;
+			i4 &= 255;
+			n1 = (libnoise_Utils.Randoms[i4 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i4 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i4 << 2) + 2] * (nz - z0)) * 2.12;
+			var ix1 = (1.0 - xs) * n0 + xs * n1;
+			var iy0 = (1.0 - ys) * ix0 + ys * ix1;
+			var i5 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i5 ^= i5 >> libnoise_Utils.GeneratorShift;
+			i5 &= 255;
+			n0 = (libnoise_Utils.Randoms[i5 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i5 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i5 << 2) + 2] * (nz - z1)) * 2.12;
+			var i6 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i6 ^= i6 >> libnoise_Utils.GeneratorShift;
+			i6 &= 255;
+			n1 = (libnoise_Utils.Randoms[i6 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i6 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i6 << 2) + 2] * (nz - z1)) * 2.12;
+			ix0 = (1.0 - xs) * n0 + xs * n1;
+			var i7 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i7 ^= i7 >> libnoise_Utils.GeneratorShift;
+			i7 &= 255;
+			n0 = (libnoise_Utils.Randoms[i7 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i7 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i7 << 2) + 2] * (nz - z1)) * 2.12;
+			var i8 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i8 ^= i8 >> libnoise_Utils.GeneratorShift;
+			i8 &= 255;
+			n1 = (libnoise_Utils.Randoms[i8 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i8 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i8 << 2) + 2] * (nz - z1)) * 2.12;
+			ix1 = (1.0 - xs) * n0 + xs * n1;
+			var signal = (1.0 - zs) * iy0 + zs * ((1.0 - ys) * ix0 + ys * ix1);
 			signal = 2.0 * Math.abs(signal) - 1.0;
 			value += signal * curp;
 			x *= this.lacunarity;
@@ -28476,7 +28944,87 @@ libnoise_generator_Perlin.prototype = $extend(libnoise_ModuleBase.prototype,{
 		var _g1 = 0;
 		var _g = this.octaves;
 		while(_g1 < _g) {
-			value += libnoise_Utils.GradientCoherentNoise3D(libnoise_Utils.MakeInt32Range(x),libnoise_Utils.MakeInt32Range(y),libnoise_Utils.MakeInt32Range(z),this.seed + _g1++ & -1,this.quality) * cp;
+			var i = _g1++;
+			var nx = x >= 1073741824.0?2.0 * (x - (x / 1073741824.0 | 0) * 1073741824.0) - 1073741824.0:x <= -1073741824.0?2.0 * (x - (x / 1073741824.0 | 0) * 1073741824.0) + 1073741824.0:x;
+			var ny = y >= 1073741824.0?2.0 * (y - (y / 1073741824.0 | 0) * 1073741824.0) - 1073741824.0:y <= -1073741824.0?2.0 * (y - (y / 1073741824.0 | 0) * 1073741824.0) + 1073741824.0:y;
+			var nz = z >= 1073741824.0?2.0 * (z - (z / 1073741824.0 | 0) * 1073741824.0) - 1073741824.0:z <= -1073741824.0?2.0 * (z - (z / 1073741824.0 | 0) * 1073741824.0) + 1073741824.0:z;
+			var _seed = this.seed + i & -1;
+			var x0 = nx > 0.0?nx | 0:(nx | 0) - 1;
+			var x1 = x0 + 1;
+			var y0 = ny > 0.0?ny | 0:(ny | 0) - 1;
+			var y1 = y0 + 1;
+			var z0 = nz > 0.0?nz | 0:(nz | 0) - 1;
+			var z1 = z0 + 1;
+			var xs = 0.0;
+			var ys = 0.0;
+			var zs = 0.0;
+			switch(this.quality[1]) {
+			case 0:
+				xs = nx - x0;
+				ys = ny - y0;
+				zs = nz - z0;
+				break;
+			case 1:
+				var value1 = nx - x0;
+				xs = value1 * value1 * (3.0 - 2.0 * value1);
+				var value2 = ny - y0;
+				ys = value2 * value2 * (3.0 - 2.0 * value2);
+				var value3 = nz - z0;
+				zs = value3 * value3 * (3.0 - 2.0 * value3);
+				break;
+			case 2:
+				var value4 = nx - x0;
+				var a3 = value4 * value4 * value4;
+				var a4 = a3 * value4;
+				xs = 6.0 * (a4 * value4) - 15.0 * a4 + 10.0 * a3;
+				var value5 = ny - y0;
+				var a31 = value5 * value5 * value5;
+				var a41 = a31 * value5;
+				ys = 6.0 * (a41 * value5) - 15.0 * a41 + 10.0 * a31;
+				var value6 = nz - z0;
+				var a32 = value6 * value6 * value6;
+				var a42 = a32 * value6;
+				zs = 6.0 * (a42 * value6) - 15.0 * a42 + 10.0 * a32;
+				break;
+			}
+			var i1 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i1 ^= i1 >> libnoise_Utils.GeneratorShift;
+			i1 &= 255;
+			var n0 = (libnoise_Utils.Randoms[i1 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i1 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i1 << 2) + 2] * (nz - z0)) * 2.12;
+			var i2 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i2 ^= i2 >> libnoise_Utils.GeneratorShift;
+			i2 &= 255;
+			var n1 = (libnoise_Utils.Randoms[i2 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i2 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i2 << 2) + 2] * (nz - z0)) * 2.12;
+			var ix0 = (1.0 - xs) * n0 + xs * n1;
+			var i3 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i3 ^= i3 >> libnoise_Utils.GeneratorShift;
+			i3 &= 255;
+			n0 = (libnoise_Utils.Randoms[i3 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i3 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i3 << 2) + 2] * (nz - z0)) * 2.12;
+			var i4 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i4 ^= i4 >> libnoise_Utils.GeneratorShift;
+			i4 &= 255;
+			n1 = (libnoise_Utils.Randoms[i4 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i4 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i4 << 2) + 2] * (nz - z0)) * 2.12;
+			var ix1 = (1.0 - xs) * n0 + xs * n1;
+			var iy0 = (1.0 - ys) * ix0 + ys * ix1;
+			var i5 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i5 ^= i5 >> libnoise_Utils.GeneratorShift;
+			i5 &= 255;
+			n0 = (libnoise_Utils.Randoms[i5 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i5 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i5 << 2) + 2] * (nz - z1)) * 2.12;
+			var i6 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i6 ^= i6 >> libnoise_Utils.GeneratorShift;
+			i6 &= 255;
+			n1 = (libnoise_Utils.Randoms[i6 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i6 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i6 << 2) + 2] * (nz - z1)) * 2.12;
+			ix0 = (1.0 - xs) * n0 + xs * n1;
+			var i7 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i7 ^= i7 >> libnoise_Utils.GeneratorShift;
+			i7 &= 255;
+			n0 = (libnoise_Utils.Randoms[i7 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i7 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i7 << 2) + 2] * (nz - z1)) * 2.12;
+			var i8 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i8 ^= i8 >> libnoise_Utils.GeneratorShift;
+			i8 &= 255;
+			n1 = (libnoise_Utils.Randoms[i8 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i8 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i8 << 2) + 2] * (nz - z1)) * 2.12;
+			ix1 = (1.0 - xs) * n0 + xs * n1;
+			value += ((1.0 - zs) * iy0 + zs * ((1.0 - ys) * ix0 + ys * ix1)) * cp;
 			x *= this.lacunarity;
 			y *= this.lacunarity;
 			z *= this.lacunarity;
@@ -28517,7 +29065,86 @@ libnoise_generator_RidgedMultifractal.prototype = $extend(libnoise_ModuleBase.pr
 		var _g = this.octaves;
 		while(_g1 < _g) {
 			var i = _g1++;
-			var signal = libnoise_Utils.GradientCoherentNoise3D(libnoise_Utils.MakeInt32Range(x),libnoise_Utils.MakeInt32Range(y),libnoise_Utils.MakeInt32Range(z),this.seed + i & 2147483647,this.quality);
+			var nx = x >= 1073741824.0?2.0 * (x - (x / 1073741824.0 | 0) * 1073741824.0) - 1073741824.0:x <= -1073741824.0?2.0 * (x - (x / 1073741824.0 | 0) * 1073741824.0) + 1073741824.0:x;
+			var ny = y >= 1073741824.0?2.0 * (y - (y / 1073741824.0 | 0) * 1073741824.0) - 1073741824.0:y <= -1073741824.0?2.0 * (y - (y / 1073741824.0 | 0) * 1073741824.0) + 1073741824.0:y;
+			var nz = z >= 1073741824.0?2.0 * (z - (z / 1073741824.0 | 0) * 1073741824.0) - 1073741824.0:z <= -1073741824.0?2.0 * (z - (z / 1073741824.0 | 0) * 1073741824.0) + 1073741824.0:z;
+			var _seed = this.seed + i & 2147483647;
+			var x0 = nx > 0.0?nx | 0:(nx | 0) - 1;
+			var x1 = x0 + 1;
+			var y0 = ny > 0.0?ny | 0:(ny | 0) - 1;
+			var y1 = y0 + 1;
+			var z0 = nz > 0.0?nz | 0:(nz | 0) - 1;
+			var z1 = z0 + 1;
+			var xs = 0.0;
+			var ys = 0.0;
+			var zs = 0.0;
+			switch(this.quality[1]) {
+			case 0:
+				xs = nx - x0;
+				ys = ny - y0;
+				zs = nz - z0;
+				break;
+			case 1:
+				var value1 = nx - x0;
+				xs = value1 * value1 * (3.0 - 2.0 * value1);
+				var value2 = ny - y0;
+				ys = value2 * value2 * (3.0 - 2.0 * value2);
+				var value3 = nz - z0;
+				zs = value3 * value3 * (3.0 - 2.0 * value3);
+				break;
+			case 2:
+				var value4 = nx - x0;
+				var a3 = value4 * value4 * value4;
+				var a4 = a3 * value4;
+				xs = 6.0 * (a4 * value4) - 15.0 * a4 + 10.0 * a3;
+				var value5 = ny - y0;
+				var a31 = value5 * value5 * value5;
+				var a41 = a31 * value5;
+				ys = 6.0 * (a41 * value5) - 15.0 * a41 + 10.0 * a31;
+				var value6 = nz - z0;
+				var a32 = value6 * value6 * value6;
+				var a42 = a32 * value6;
+				zs = 6.0 * (a42 * value6) - 15.0 * a42 + 10.0 * a32;
+				break;
+			}
+			var i1 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i1 ^= i1 >> libnoise_Utils.GeneratorShift;
+			i1 &= 255;
+			var n0 = (libnoise_Utils.Randoms[i1 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i1 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i1 << 2) + 2] * (nz - z0)) * 2.12;
+			var i2 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i2 ^= i2 >> libnoise_Utils.GeneratorShift;
+			i2 &= 255;
+			var n1 = (libnoise_Utils.Randoms[i2 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i2 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i2 << 2) + 2] * (nz - z0)) * 2.12;
+			var ix0 = (1.0 - xs) * n0 + xs * n1;
+			var i3 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i3 ^= i3 >> libnoise_Utils.GeneratorShift;
+			i3 &= 255;
+			n0 = (libnoise_Utils.Randoms[i3 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i3 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i3 << 2) + 2] * (nz - z0)) * 2.12;
+			var i4 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z0 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i4 ^= i4 >> libnoise_Utils.GeneratorShift;
+			i4 &= 255;
+			n1 = (libnoise_Utils.Randoms[i4 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i4 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i4 << 2) + 2] * (nz - z0)) * 2.12;
+			var ix1 = (1.0 - xs) * n0 + xs * n1;
+			var iy0 = (1.0 - ys) * ix0 + ys * ix1;
+			var i5 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i5 ^= i5 >> libnoise_Utils.GeneratorShift;
+			i5 &= 255;
+			n0 = (libnoise_Utils.Randoms[i5 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i5 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i5 << 2) + 2] * (nz - z1)) * 2.12;
+			var i6 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y0 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i6 ^= i6 >> libnoise_Utils.GeneratorShift;
+			i6 &= 255;
+			n1 = (libnoise_Utils.Randoms[i6 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i6 << 2) + 1] * (ny - y0) + libnoise_Utils.Randoms[(i6 << 2) + 2] * (nz - z1)) * 2.12;
+			ix0 = (1.0 - xs) * n0 + xs * n1;
+			var i7 = libnoise_Utils.GeneratorNoiseX * x0 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i7 ^= i7 >> libnoise_Utils.GeneratorShift;
+			i7 &= 255;
+			n0 = (libnoise_Utils.Randoms[i7 << 2] * (nx - x0) + libnoise_Utils.Randoms[(i7 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i7 << 2) + 2] * (nz - z1)) * 2.12;
+			var i8 = libnoise_Utils.GeneratorNoiseX * x1 + libnoise_Utils.GeneratorNoiseY * y1 + libnoise_Utils.GeneratorNoiseZ * z1 + libnoise_Utils.GeneratorSeed * _seed & -1;
+			i8 ^= i8 >> libnoise_Utils.GeneratorShift;
+			i8 &= 255;
+			n1 = (libnoise_Utils.Randoms[i8 << 2] * (nx - x1) + libnoise_Utils.Randoms[(i8 << 2) + 1] * (ny - y1) + libnoise_Utils.Randoms[(i8 << 2) + 2] * (nz - z1)) * 2.12;
+			ix1 = (1.0 - xs) * n0 + xs * n1;
+			var signal = (1.0 - zs) * iy0 + zs * ((1.0 - ys) * ix0 + ys * ix1);
 			signal = Math.abs(signal);
 			signal = 1.0 - signal;
 			signal *= signal;
@@ -28635,6 +29262,31 @@ libnoise_generator_Voronoi.prototype = $extend(libnoise_ModuleBase.prototype,{
 	}
 	,__class__: libnoise_generator_Voronoi
 });
+var libnoise_model_Plane = function(sourceModule) {
+	this.module = sourceModule;
+};
+$hxClasses["libnoise.model.Plane"] = libnoise_model_Plane;
+libnoise_model_Plane.__name__ = ["libnoise","model","Plane"];
+libnoise_model_Plane.prototype = {
+	module: null
+	,getValue: function(x,z) {
+		return this.module.getValue(x,0,z);
+	}
+	,__class__: libnoise_model_Plane
+};
+var libnoise_model_Sphere = function(sourceModule) {
+	this.module = sourceModule;
+};
+$hxClasses["libnoise.model.Sphere"] = libnoise_model_Sphere;
+libnoise_model_Sphere.__name__ = ["libnoise","model","Sphere"];
+libnoise_model_Sphere.prototype = {
+	module: null
+	,getValue: function(lat,lon) {
+		var r = Math.cos(0.017 * lat);
+		return this.module.getValue(r * Math.cos(0.017 * lon),Math.sin(0.017 * lat),r * Math.sin(0.017 * lon));
+	}
+	,__class__: libnoise_model_Sphere
+};
 var libnoise_operator_Abs = function(input) {
 	libnoise_ModuleBase.call(this,1);
 	this.modules[0] = input;
@@ -28679,7 +29331,10 @@ libnoise_operator_Blend.prototype = $extend(libnoise_ModuleBase.prototype,{
 		return this.modules[2];
 	}
 	,getValue: function(x,y,z) {
-		return libnoise_Utils.InterpolateLinear(this.modules[0].getValue(x,y,z),this.modules[1].getValue(x,y,z),(this.modules[2].getValue(x,y,z) + 1.0) / 2.0);
+		var a = this.modules[0].getValue(x,y,z);
+		var b = this.modules[1].getValue(x,y,z);
+		var c = (this.modules[2].getValue(x,y,z) + 1.0) / 2.0;
+		return (1.0 - c) * a + c * b;
 	}
 	,__class__: libnoise_operator_Blend
 	,__properties__: {set_controller:"set_controller",get_controller:"get_controller"}
@@ -28709,6 +29364,41 @@ libnoise_operator_Clamp.prototype = $extend(libnoise_ModuleBase.prototype,{
 		}
 	}
 	,__class__: libnoise_operator_Clamp
+});
+var libnoise_operator_Displace = function(input,x,y,z) {
+	libnoise_ModuleBase.call(this,4);
+	this.modules[0] = input;
+	this.modules[1] = x;
+	this.modules[2] = y;
+	this.modules[3] = z;
+};
+$hxClasses["libnoise.operator.Displace"] = libnoise_operator_Displace;
+libnoise_operator_Displace.__name__ = ["libnoise","operator","Displace"];
+libnoise_operator_Displace.__super__ = libnoise_ModuleBase;
+libnoise_operator_Displace.prototype = $extend(libnoise_ModuleBase.prototype,{
+	set_X: function(val) {
+		return this.modules[1] = val;
+	}
+	,get_X: function() {
+		return this.modules[1];
+	}
+	,set_Y: function(val) {
+		return this.modules[2] = val;
+	}
+	,get_Y: function() {
+		return this.modules[2];
+	}
+	,set_Z: function(val) {
+		return this.modules[3] = val;
+	}
+	,get_Z: function() {
+		return this.modules[3];
+	}
+	,getValue: function(x,y,z) {
+		return this.modules[0].getValue(x + this.modules[1].getValue(x,y,z),y + this.modules[2].getValue(x,y,z),z + this.modules[3].getValue(x,y,z));
+	}
+	,__class__: libnoise_operator_Displace
+	,__properties__: {set_Z:"set_Z",get_Z:"get_Z",set_Y:"set_Y",get_Y:"get_Y",set_X:"set_X",get_X:"get_X"}
 });
 var libnoise_operator_Invert = function(input) {
 	libnoise_ModuleBase.call(this,1);
@@ -28816,6 +29506,41 @@ libnoise_operator_ScaleBias.prototype = $extend(libnoise_ModuleBase.prototype,{
 	}
 	,__class__: libnoise_operator_ScaleBias
 });
+var libnoise_operator_ScaleCoords = function(input,x,y,z) {
+	libnoise_ModuleBase.call(this,4);
+	this.modules[0] = input;
+	this.modules[1] = x;
+	this.modules[2] = y;
+	this.modules[3] = z;
+};
+$hxClasses["libnoise.operator.ScaleCoords"] = libnoise_operator_ScaleCoords;
+libnoise_operator_ScaleCoords.__name__ = ["libnoise","operator","ScaleCoords"];
+libnoise_operator_ScaleCoords.__super__ = libnoise_ModuleBase;
+libnoise_operator_ScaleCoords.prototype = $extend(libnoise_ModuleBase.prototype,{
+	set_X: function(val) {
+		return this.modules[1] = val;
+	}
+	,get_X: function() {
+		return this.modules[1];
+	}
+	,set_Y: function(val) {
+		return this.modules[2] = val;
+	}
+	,get_Y: function() {
+		return this.modules[2];
+	}
+	,set_Z: function(val) {
+		return this.modules[3] = val;
+	}
+	,get_Z: function() {
+		return this.modules[3];
+	}
+	,getValue: function(x,y,z) {
+		return this.modules[0].getValue(x * this.modules[1].getValue(x,y,z),y * this.modules[2].getValue(x,y,z),z * this.modules[3].getValue(x,y,z));
+	}
+	,__class__: libnoise_operator_ScaleCoords
+	,__properties__: {set_Z:"set_Z",get_Z:"get_Z",set_Y:"set_Y",get_Y:"get_Y",set_X:"set_X",get_X:"get_X"}
+});
 var libnoise_operator_Select = function(min,max,fallOff,inputA,inputB,controller) {
 	if(fallOff == null) {
 		fallOff = 0.0;
@@ -28855,7 +29580,7 @@ libnoise_operator_Select.prototype = $extend(libnoise_ModuleBase.prototype,{
 				var lc = this.min - this.fallOff;
 				var value = (cv - lc) / (this.min + this.fallOff - lc);
 				a = value * value * (3.0 - 2.0 * value);
-				return libnoise_Utils.InterpolateLinear(this.modules[0].getValue(x,y,z),this.modules[1].getValue(x,y,z),a);
+				return (1.0 - a) * this.modules[0].getValue(x,y,z) + a * this.modules[1].getValue(x,y,z);
 			}
 			if(cv < this.max - this.fallOff) {
 				return this.modules[1].getValue(x,y,z);
@@ -28864,7 +29589,7 @@ libnoise_operator_Select.prototype = $extend(libnoise_ModuleBase.prototype,{
 				var lc1 = this.max - this.fallOff;
 				var value1 = (cv - lc1) / (this.max + this.fallOff - lc1);
 				a = value1 * value1 * (3.0 - 2.0 * value1);
-				return libnoise_Utils.InterpolateLinear(this.modules[1].getValue(x,y,z),this.modules[0].getValue(x,y,z),a);
+				return (1.0 - a) * this.modules[1].getValue(x,y,z) + a * this.modules[0].getValue(x,y,z);
 			}
 			return this.modules[0].getValue(x,y,z);
 		}
@@ -28959,6 +29684,28 @@ libnoise_operator_Turbulence.prototype = $extend(libnoise_ModuleBase.prototype,{
 		return this.modules[0].getValue(x + this.xDistort.getValue(x + 0.189422607421875,y + 0.99371337890625,z + 0.4781646728515625) * this.power,y + this.yDistort.getValue(x + 0.4046478271484375,y + 0.276611328125,z + 0.9230499267578125) * this.power,z + this.zDistort.getValue(x + 0.82122802734375,y + 0.1710968017578125,z + 0.6842803955078125) * this.power);
 	}
 	,__class__: libnoise_operator_Turbulence
+});
+var modules_CircleWrap = function(inp,diam) {
+	this.DEG_TO_RAD = 0.017;
+	this.PI = 3.14159;
+	libnoise_ModuleBase.call(this,1);
+	this.modules[0] = inp;
+	this.d = diam;
+};
+$hxClasses["modules.CircleWrap"] = modules_CircleWrap;
+modules_CircleWrap.__name__ = ["modules","CircleWrap"];
+modules_CircleWrap.__super__ = libnoise_ModuleBase;
+modules_CircleWrap.prototype = $extend(libnoise_ModuleBase.prototype,{
+	d: null
+	,PI: null
+	,DEG_TO_RAD: null
+	,getValue: function(x,y,z) {
+		var TWO_PI = 2 * this.PI;
+		var u = TWO_PI * x / this.d;
+		var v = TWO_PI * z / this.d;
+		return this.modules[0].getValue(Math.cos(u) * (256 * Math.cos(v) + 512),Math.sin(u) * (256 * Math.sin(v) + 512),256 * Math.sin(u));
+	}
+	,__class__: modules_CircleWrap
 });
 var thx_Arrays = function() { };
 $hxClasses["thx.Arrays"] = thx_Arrays;
@@ -33838,12 +34585,14 @@ libnoise_operator_Abs.__rtti = "<class path=\"libnoise.operator.Abs\" params=\"\
 libnoise_operator_Add.__rtti = "<class path=\"libnoise.operator.Add\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"22\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"16\"><f a=\"lhs:rhs\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Blend.__rtti = "<class path=\"libnoise.operator.Blend\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<controller public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></controller>\n\t<set_controller public=\"1\" get=\"inline\" set=\"null\" line=\"12\"><f a=\"value\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_controller>\n\t<get_controller public=\"1\" get=\"inline\" set=\"null\" line=\"16\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_controller>\n\t<getValue public=\"1\" set=\"method\" line=\"34\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"27\"><f a=\"rhs:lhs:controller\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Clamp.__rtti = "<class path=\"libnoise.operator.Clamp\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<min public=\"1\" expr=\"-1.0\" line=\"10\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>-1.0</e></m></meta>\n\t</min>\n\t<max public=\"1\" expr=\"1.0\" line=\"11\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</max>\n\t<getValue public=\"1\" set=\"method\" line=\"26\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"19\"><f a=\"min:max:input\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
+libnoise_operator_Displace.__rtti = "<class path=\"libnoise.operator.Displace\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<X public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></X>\n\t<set_X public=\"1\" get=\"inline\" set=\"null\" line=\"12\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_X>\n\t<get_X public=\"1\" get=\"inline\" set=\"null\" line=\"15\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_X>\n\t<Y public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></Y>\n\t<set_Y public=\"1\" get=\"inline\" set=\"null\" line=\"19\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_Y>\n\t<get_Y public=\"1\" get=\"inline\" set=\"null\" line=\"22\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_Y>\n\t<Z public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></Z>\n\t<set_Z public=\"1\" get=\"inline\" set=\"null\" line=\"26\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_Z>\n\t<get_Z public=\"1\" get=\"inline\" set=\"null\" line=\"29\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_Z>\n\t<getValue public=\"1\" set=\"method\" line=\"48\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"40\"><f a=\"input:x:y:z\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Invert.__rtti = "<class path=\"libnoise.operator.Invert\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"15\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"10\"><f a=\"input\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Max.__rtti = "<class path=\"libnoise.operator.Max\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"17\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"11\"><f a=\"lhs:rhs\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Min.__rtti = "<class path=\"libnoise.operator.Min\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"17\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"11\"><f a=\"lhs:rhs\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Multiply.__rtti = "<class path=\"libnoise.operator.Multiply\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"17\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"11\"><f a=\"lhs:rhs\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Scale.__rtti = "<class path=\"libnoise.operator.Scale\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<sx><x path=\"Float\"/></sx>\n\t<sy><x path=\"Float\"/></sy>\n\t<sz><x path=\"Float\"/></sz>\n\t<getValue public=\"1\" set=\"method\" line=\"23\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"15\">\n\t\t<f a=\"?sx:?sy:?sz:input\" v=\"1.0:1.0:1.0:\">\n\t\t\t<x path=\"Float\"/>\n\t\t\t<x path=\"Float\"/>\n\t\t\t<x path=\"Float\"/>\n\t\t\t<c path=\"libnoise.ModuleBase\"/>\n\t\t\t<x path=\"Void\"/>\n\t\t</f>\n\t\t<meta><m n=\":value\"><e>{ sz : 1.0, sy : 1.0, sx : 1.0 }</e></m></meta>\n\t</new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_ScaleBias.__rtti = "<class path=\"libnoise.operator.ScaleBias\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<scale public=\"1\"><x path=\"Float\"/></scale>\n\t<bias public=\"1\"><x path=\"Float\"/></bias>\n\t<getValue public=\"1\" set=\"method\" line=\"20\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"13\">\n\t\t<f a=\"?scale:?bias:input\" v=\"1.0:0.0:\">\n\t\t\t<x path=\"Float\"/>\n\t\t\t<x path=\"Float\"/>\n\t\t\t<c path=\"libnoise.ModuleBase\"/>\n\t\t\t<x path=\"Void\"/>\n\t\t</f>\n\t\t<meta><m n=\":value\"><e>{ bias : 0.0, scale : 1.0 }</e></m></meta>\n\t</new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
+libnoise_operator_ScaleCoords.__rtti = "<class path=\"libnoise.operator.ScaleCoords\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<X public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></X>\n\t<set_X public=\"1\" get=\"inline\" set=\"null\" line=\"13\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_X>\n\t<get_X public=\"1\" get=\"inline\" set=\"null\" line=\"16\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_X>\n\t<Y public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></Y>\n\t<set_Y public=\"1\" get=\"inline\" set=\"null\" line=\"20\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_Y>\n\t<get_Y public=\"1\" get=\"inline\" set=\"null\" line=\"23\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_Y>\n\t<Z public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></Z>\n\t<set_Z public=\"1\" get=\"inline\" set=\"null\" line=\"27\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_Z>\n\t<get_Z public=\"1\" get=\"inline\" set=\"null\" line=\"30\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_Z>\n\t<getValue public=\"1\" set=\"method\" line=\"49\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"41\"><f a=\"input:x:y:z\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Select.__rtti = "<class path=\"libnoise.operator.Select\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<fallOff public=\"1\"><x path=\"Float\"/></fallOff>\n\t<raw public=\"1\"><x path=\"Float\"/></raw>\n\t<min public=\"1\" expr=\"-1.0\" line=\"12\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>-1.0</e></m></meta>\n\t</min>\n\t<max public=\"1\" expr=\"1.0\" line=\"13\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</max>\n\t<getValue public=\"1\" set=\"method\" line=\"34\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"24\">\n\t\t<f a=\"?min:?max:?fallOff:inputA:inputB:controller\" v=\"-1.0:1.0:0.0:::\">\n\t\t\t<x path=\"Float\"/>\n\t\t\t<x path=\"Float\"/>\n\t\t\t<x path=\"Float\"/>\n\t\t\t<c path=\"libnoise.ModuleBase\"/>\n\t\t\t<c path=\"libnoise.ModuleBase\"/>\n\t\t\t<c path=\"libnoise.ModuleBase\"/>\n\t\t\t<x path=\"Void\"/>\n\t\t</f>\n\t\t<meta><m n=\":value\"><e>{ fallOff : 0.0, max : 1.0, min : -1.0 }</e></m></meta>\n\t</new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Subtract.__rtti = "<class path=\"libnoise.operator.Subtract\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"17\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"11\"><f a=\"lhs:rhs\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Translate.__rtti = "<class path=\"libnoise.operator.Translate\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<dx public=\"1\" expr=\"1.0\" line=\"10\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</dx>\n\t<dy public=\"1\" expr=\"1.0\" line=\"11\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</dy>\n\t<dz public=\"1\" expr=\"1.0\" line=\"12\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</dz>\n\t<getValue public=\"1\" set=\"method\" line=\"29\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"21\"><f a=\"dx:dy:dz:input\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
@@ -33857,6 +34606,7 @@ libnoise_operator_Turbulence.Z1 = 0.9230499267578125;
 libnoise_operator_Turbulence.X2 = 0.82122802734375;
 libnoise_operator_Turbulence.Y2 = 0.1710968017578125;
 libnoise_operator_Turbulence.Z2 = 0.6842803955078125;
+modules_CircleWrap.__rtti = "<class path=\"modules.CircleWrap\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<d><x path=\"Float\"/></d>\n\t<PI line=\"8\"><x path=\"Float\"/></PI>\n\t<DEG_TO_RAD line=\"9\"><x path=\"Float\"/></DEG_TO_RAD>\n\t<getValue public=\"1\" set=\"method\" line=\"17\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"11\"><f a=\"inp:diam\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Void\"/>\n</f></new>\n</class>";
 thx_Floats.TOLERANCE = 10e-5;
 thx_Floats.EPSILON = 1e-9;
 thx_Floats.pattern_parse = new EReg("^(\\+|-)?\\d+(\\.\\d+)?(e-?\\d+)?$","");

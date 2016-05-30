@@ -15,6 +15,8 @@ export class Home {
         this.eva.subscribe('editor-mode', function(mode){
             this.editorMode = mode;
         }.bind(this));
+
+        this.eva.subscribe('interp-error', err => console.error(err.message));
     }
 
     attached(){
@@ -43,6 +45,9 @@ export class Home {
             west:{
                 size:300,
                 resizable: false
+            },
+            center:{
+                minWidth:300
             },
             east:{
                 size:400,

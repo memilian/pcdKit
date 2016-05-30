@@ -21,6 +21,19 @@ class Gradient implements INamedItem{
         sort();
     }
 
+    public function remove(index : Float){
+        var i = 0;
+        var ri = -1;
+        for(val in values){
+            if(val.left == index) ri = i;
+            i++;
+        }
+        if(ri != -1){
+        values.splice(ri,1);
+        sort();
+        }
+    }
+
     public function sort(){
         values.sort(function(a, b) {
             return a.left > b.left ? 1 : a.left == b.left ? 0 : -1;
@@ -39,6 +52,8 @@ class Gradient implements INamedItem{
             }
             i++;
         }
+        if(high == null)
+            return Color.Black;
         if(low.right == high.right)
             return low.right;
 

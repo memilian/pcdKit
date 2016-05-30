@@ -8,7 +8,6 @@ System.config({
     "resources/*": "resources/*",
     "theme-*": "ace/*"
   },
-
   map: {
     "ace": "github:ajaxorg/ace-builds@1.2.3",
     "aurelia-animator-css": "npm:aurelia-animator-css@1.0.0-beta.1.2.0",

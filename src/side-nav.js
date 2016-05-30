@@ -24,6 +24,24 @@ export class SideNav{
         this.toaster = toaster;
         this.events = events;
         this.modal = modal;
+        this.events.subscribe('project-loaded', this.onprojectloaded.bind(this));
+        this.events.subscribe('module-loaded', this.onmoduleloaded.bind(this));
+    }
+
+    onprojectloaded(project){
+        if(project === {}) project = null;
+        if(project !== null)
+            this.toaster.show(project.name+' loaded', 1000);
+        else
+            this.toaster.show('Could not load '+project.name,2000);
+        this.loadedProject = project;
+        this.module = this.loadedProject.currentModule;
+        this.curProjectName = name;
+    }
+
+    onmoduleloaded(module){
+        this.curModuleName = module.name;
+        this.events.publish('editor-mode', "CODE");
     }
 
     newProject(){
@@ -35,15 +53,7 @@ export class SideNav{
     loadProject(name){
         if(this.loadedProject != null)
             this.loadedProject.save();
-        let proj = ProjectManager.loadProject(name);
-        if(proj === {}) proj = null;
-        if(proj !== null)
-            this.toaster.show(proj.name+' loaded', 1000);
-        else
-            this.toaster.show('Could not load '+proj.name,2000);
-        this.loadedProject = proj;
-        this.module = this.loadedProject.currentModule;
-        this.curProjectName = name;
+        ProjectManager.loadProject(name);
     }
 
     deleteProject(name){
@@ -82,8 +92,6 @@ export class SideNav{
     loadModule(module){
         this.loadedProject.save();
         this.events.publish('module-loaded', module);
-        this.curModuleName = module.name;
-        this.events.publish('editor-mode', "CODE");
     }
 
     newGradient(){

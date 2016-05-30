@@ -15,6 +15,8 @@ export class ColorSelectorCustomElement{
     height=256;
     active = false;
 
+    suspendClick = false;
+
     mouseX=0;
     mouseY=0;
 
@@ -56,6 +58,10 @@ export class ColorSelectorCustomElement{
     }
 
     click(){
+        if(this.suspendClick){
+            this.suspendClick = !this.suspendClick;
+            return;
+        }
         this.active = ! this.active;
         if(this.active)
             this.updateCanvas();
