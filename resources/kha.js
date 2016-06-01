@@ -849,7 +849,7 @@ Module.prototype = {
 var PcdKit = function() {
 	this.codeDirty = false;
 	this.lastChange = 0.0;
-	this.throttle = 0.3;
+	this.debounce = 0.3;
 	this.textureDirty = false;
 	this.mq = new activity_MessageQueue();
 	var _gthis = this;
@@ -1087,20 +1087,13 @@ PcdKit.prototype = {
 			_this25.h["CircleWrap"] = value25;
 		}
 		var _this26 = this.interp.variables;
-		var value26 = libnoise_operator_ScaleCoords;
-		if(__map_reserved.ScaleCoords != null) {
-			_this26.setReserved("ScaleCoords",value26);
-		} else {
-			_this26.h["ScaleCoords"] = value26;
-		}
-		var _this27 = this.interp.variables;
 		if(__map_reserved._scaleNormedValue != null) {
-			_this27.setReserved("_scaleNormedValue",function(value271,newmin1,newmax1) {
-				return value271 * newmax1 + newmin1;
+			_this26.setReserved("_scaleNormedValue",function(value261,newmin1,newmax1) {
+				return value261 * newmax1 + newmin1;
 			});
 		} else {
-			_this27.h["_scaleNormedValue"] = function(value271,newmin1,newmax1) {
-				return value271 * newmax1 + newmin1;
+			_this26.h["_scaleNormedValue"] = function(value261,newmin1,newmax1) {
+				return value261 * newmax1 + newmin1;
 			};
 		}
 	}
@@ -1116,7 +1109,7 @@ PcdKit.prototype = {
 		this.mq.sender.send(TexGenMessage.Generate(this.module,options,this.texture));
 		this.textureDirty = true;
 	}
-	,throttle: null
+	,debounce: null
 	,lastChange: null
 	,codeDirty: null
 	,oncodechanged: function(infos) {
@@ -1138,7 +1131,7 @@ PcdKit.prototype = {
 		this.codeDirty = true;
 	}
 	,updateTexture: function() {
-		if(!this.codeDirty || kha_Scheduler.realTime() - this.lastChange < this.throttle) {
+		if(!this.codeDirty || kha_Scheduler.realTime() - this.lastChange < this.debounce) {
 			return;
 		}
 		this.codeDirty = false;
@@ -1149,10 +1142,11 @@ PcdKit.prototype = {
 			if(this.module != null) {
 				this.generateTexture();
 			}
+			PcdKit.events.publish("console-message",{ message : "ok", type : "info"});
 		} catch( ex ) {
 			haxe_CallStack.lastException = ex;
 			if (ex instanceof js__$Boot_HaxeError) ex = ex.val;
-			PcdKit.events.publish("interp-error",{ message : ex});
+			PcdKit.events.publish("console-message",{ message : ex, type : "error"});
 		}
 	}
 	,update: function() {
@@ -1167,7 +1161,7 @@ PcdKit.prototype = {
 		} catch( exception ) {
 			haxe_CallStack.lastException = exception;
 			if (exception instanceof js__$Boot_HaxeError) exception = exception.val;
-			haxe_Log.trace(exception,{ fileName : "PcdKit.hx", lineNumber : 192, className : "PcdKit", methodName : "update"});
+			haxe_Log.trace(exception,{ fileName : "PcdKit.hx", lineNumber : 195, className : "PcdKit", methodName : "update"});
 		}
 	}
 	,render: function(framebuffer) {
@@ -1526,6 +1520,7 @@ var RendererOptions = function() {
 	this.size = 128;
 	this.backgroundColor = 65450;
 	this.atmosphereColor = 16777215;
+	this.seamless = false;
 	this.atmosphere = true;
 	this.planetShape = true;
 };
@@ -1534,6 +1529,7 @@ RendererOptions.__name__ = ["RendererOptions"];
 RendererOptions.prototype = {
 	planetShape: null
 	,atmosphere: null
+	,seamless: null
 	,atmosphereColor: null
 	,backgroundColor: null
 	,size: null
@@ -1780,7 +1776,7 @@ StringTools.quoteWinArg = function(argument,escapeMetaCharacters) {
 	}
 };
 var TexGenActivity = function(mq) {
-	this.sum = 0;
+	this.curRow = 0;
 	var _gthis = this;
 	this.mq = mq;
 	mq.receiver.set_receive(function(msg) {
@@ -1788,12 +1784,14 @@ var TexGenActivity = function(mq) {
 		case 0:
 			var tex = msg[4];
 			var options = msg[3];
+			_gthis.curRow = 0;
 			_gthis.module = msg[2];
 			_gthis.gradient = options.gradient;
 			_gthis.size = options.size;
 			_gthis.options = options;
 			_gthis.radius = Math.ceil(_gthis.size / 2);
 			if(options.planetShape) {
+				_gthis.module = new libnoise_operator_Scale(100,100,100,_gthis.module);
 				var builder = new builders_NoiseMapBuilderSphereByRow();
 				builder.sourceModule = _gthis.module;
 				builder.setDestSize(_gthis.size,_gthis.size);
@@ -1804,7 +1802,7 @@ var TexGenActivity = function(mq) {
 				builder1.sourceModule = _gthis.module;
 				builder1.setDestSize(_gthis.size,_gthis.size);
 				builder1.setBounds(0,0,256,256);
-				builder1.isSeamlessEnabled = true;
+				builder1.isSeamlessEnabled = options.seamless;
 				_gthis.noiseMapBuilder = builder1;
 			}
 			_gthis.noiseMap = new libnoise_builder_NoiseMap(_gthis.size,_gthis.size);
@@ -1820,7 +1818,7 @@ var TexGenActivity = function(mq) {
 $hxClasses["TexGenActivity"] = TexGenActivity;
 TexGenActivity.__name__ = ["TexGenActivity"];
 TexGenActivity.prototype = {
-	sum: null
+	curRow: null
 	,mq: null
 	,noiseMapBuilder: null
 	,noiseMap: null
@@ -1834,6 +1832,7 @@ TexGenActivity.prototype = {
 		var _gthis = this;
 		try {
 			this.noiseMapBuilder.callback = function(row) {
+				_gthis.curRow++;
 				var g = _gthis.texture.get_g2();
 				if(_gthis.noiseMapBuilder.curRow == 0) {
 					g.begin(true,_gthis.options.backgroundColor);
@@ -1857,7 +1856,7 @@ TexGenActivity.prototype = {
 		} catch( ex ) {
 			haxe_CallStack.lastException = ex;
 			if (ex instanceof js__$Boot_HaxeError) ex = ex.val;
-			haxe_Log.trace(ex,{ fileName : "TexGenActivity.hx", lineNumber : 134, className : "TexGenActivity", methodName : "process"});
+			haxe_Log.trace(ex,{ fileName : "TexGenActivity.hx", lineNumber : 138, className : "TexGenActivity", methodName : "process"});
 		}
 	}
 	,__class__: TexGenActivity
@@ -3424,6 +3423,7 @@ libnoise_builder_NoiseMapBuilder.prototype = {
 	,sourceModule: null
 	,callback: null
 	,build: function() {
+		throw new js__$Boot_HaxeError("NoiseMapBuilder.build is abstract");
 	}
 	,setDestSize: function(width,heigth) {
 		this.destWidth = width;
@@ -5595,337 +5595,6 @@ haxe_Utf8.prototype = {
 	}
 	,__class__: haxe_Utf8
 };
-var haxe_io_Bytes = function(data) {
-	this.length = data.byteLength;
-	this.b = new Uint8Array(data);
-	this.b.bufferValue = data;
-	data.hxBytes = this;
-	data.bytes = this.b;
-};
-$hxClasses["haxe.io.Bytes"] = haxe_io_Bytes;
-haxe_io_Bytes.__name__ = ["haxe","io","Bytes"];
-haxe_io_Bytes.alloc = function(length) {
-	return new haxe_io_Bytes(new ArrayBuffer(length));
-};
-haxe_io_Bytes.ofString = function(s) {
-	var a = [];
-	var i = 0;
-	while(i < s.length) {
-		var c = s.charCodeAt(i++);
-		if(55296 <= c && c <= 56319) {
-			c = c - 55232 << 10 | s.charCodeAt(i++) & 1023;
-		}
-		if(c <= 127) {
-			a.push(c);
-		} else if(c <= 2047) {
-			a.push(192 | c >> 6);
-			a.push(128 | c & 63);
-		} else if(c <= 65535) {
-			a.push(224 | c >> 12);
-			a.push(128 | c >> 6 & 63);
-			a.push(128 | c & 63);
-		} else {
-			a.push(240 | c >> 18);
-			a.push(128 | c >> 12 & 63);
-			a.push(128 | c >> 6 & 63);
-			a.push(128 | c & 63);
-		}
-	}
-	return new haxe_io_Bytes(new Uint8Array(a).buffer);
-};
-haxe_io_Bytes.ofData = function(b) {
-	var hb = b.hxBytes;
-	if(hb != null) {
-		return hb;
-	}
-	return new haxe_io_Bytes(b);
-};
-haxe_io_Bytes.fastGet = function(b,pos) {
-	return b.bytes[pos];
-};
-haxe_io_Bytes.prototype = {
-	length: null
-	,b: null
-	,data: null
-	,get: function(pos) {
-		return this.b[pos];
-	}
-	,set: function(pos,v) {
-		this.b[pos] = v & 255;
-	}
-	,blit: function(pos,src,srcpos,len) {
-		if(pos < 0 || srcpos < 0 || len < 0 || pos + len > this.length || srcpos + len > src.length) {
-			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
-		}
-		if(srcpos == 0 && len == src.length) {
-			this.b.set(src.b,pos);
-		} else {
-			this.b.set(src.b.subarray(srcpos,srcpos + len),pos);
-		}
-	}
-	,fill: function(pos,len,value) {
-		var _g1 = 0;
-		while(_g1 < len) {
-			++_g1;
-			this.b[pos++] = value & 255;
-		}
-	}
-	,sub: function(pos,len) {
-		if(pos < 0 || len < 0 || pos + len > this.length) {
-			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
-		}
-		return new haxe_io_Bytes(this.b.buffer.slice(pos + this.b.byteOffset,pos + this.b.byteOffset + len));
-	}
-	,compare: function(other) {
-		var b1 = this.b;
-		var b2 = other.b;
-		var _g1 = 0;
-		var _g = this.length < other.length?this.length:other.length;
-		while(_g1 < _g) {
-			var i = _g1++;
-			if(b1[i] != b2[i]) {
-				return b1[i] - b2[i];
-			}
-		}
-		return this.length - other.length;
-	}
-	,initData: function() {
-		if(this.data == null) {
-			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
-		}
-	}
-	,getDouble: function(pos) {
-		if(this.data == null) {
-			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
-		}
-		return this.data.getFloat64(pos,true);
-	}
-	,getFloat: function(pos) {
-		if(this.data == null) {
-			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
-		}
-		return this.data.getFloat32(pos,true);
-	}
-	,setDouble: function(pos,v) {
-		if(this.data == null) {
-			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
-		}
-		this.data.setFloat64(pos,v,true);
-	}
-	,setFloat: function(pos,v) {
-		if(this.data == null) {
-			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
-		}
-		this.data.setFloat32(pos,v,true);
-	}
-	,getUInt16: function(pos) {
-		if(this.data == null) {
-			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
-		}
-		return this.data.getUint16(pos,true);
-	}
-	,setUInt16: function(pos,v) {
-		if(this.data == null) {
-			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
-		}
-		this.data.setUint16(pos,v,true);
-	}
-	,getInt32: function(pos) {
-		if(this.data == null) {
-			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
-		}
-		return this.data.getInt32(pos,true);
-	}
-	,setInt32: function(pos,v) {
-		if(this.data == null) {
-			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
-		}
-		this.data.setInt32(pos,v,true);
-	}
-	,getInt64: function(pos) {
-		return new haxe__$Int64__$_$_$Int64(this.getInt32(pos + 4),this.getInt32(pos));
-	}
-	,setInt64: function(pos,v) {
-		this.setInt32(pos,v.low);
-		this.setInt32(pos + 4,v.high);
-	}
-	,getString: function(pos,len) {
-		if(pos < 0 || len < 0 || pos + len > this.length) {
-			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
-		}
-		var s = "";
-		var b = this.b;
-		var fcc = String.fromCharCode;
-		var i = pos;
-		var max = pos + len;
-		while(i < max) {
-			var c = b[i++];
-			if(c < 128) {
-				if(c == 0) {
-					break;
-				}
-				s += fcc(c);
-			} else if(c < 224) {
-				s += fcc((c & 63) << 6 | b[i++] & 127);
-			} else if(c < 240) {
-				s += fcc((c & 31) << 12 | (b[i++] & 127) << 6 | b[i++] & 127);
-			} else {
-				var u = (c & 15) << 18 | (b[i++] & 127) << 12 | (b[i++] & 127) << 6 | b[i++] & 127;
-				s += fcc((u >> 10) + 55232);
-				s += fcc(u & 1023 | 56320);
-			}
-		}
-		return s;
-	}
-	,readString: function(pos,len) {
-		return this.getString(pos,len);
-	}
-	,toString: function() {
-		return this.getString(0,this.length);
-	}
-	,toHex: function() {
-		var s_b = "";
-		var chars = [];
-		var _g1 = 0;
-		var _g = "0123456789abcdef".length;
-		while(_g1 < _g) chars.push(HxOverrides.cca("0123456789abcdef",_g1++));
-		var _g11 = 0;
-		var _g2 = this.length;
-		while(_g11 < _g2) {
-			var c = this.b[_g11++];
-			s_b += String.fromCharCode(chars[c >> 4]);
-			s_b += String.fromCharCode(chars[c & 15]);
-		}
-		return s_b;
-	}
-	,getData: function() {
-		return this.b.bufferValue;
-	}
-	,__class__: haxe_io_Bytes
-};
-var haxe_crypto_Base64 = function() { };
-$hxClasses["haxe.crypto.Base64"] = haxe_crypto_Base64;
-haxe_crypto_Base64.__name__ = ["haxe","crypto","Base64"];
-haxe_crypto_Base64.encode = function(bytes,complement) {
-	if(complement == null) {
-		complement = true;
-	}
-	var str = new haxe_crypto_BaseCode(haxe_crypto_Base64.BYTES).encodeBytes(bytes).toString();
-	if(complement) {
-		switch(bytes.length % 3) {
-		case 1:
-			str += "==";
-			break;
-		case 2:
-			str += "=";
-			break;
-		default:
-		}
-	}
-	return str;
-};
-haxe_crypto_Base64.decode = function(str,complement) {
-	if(complement == null) {
-		complement = true;
-	}
-	if(complement) {
-		while(HxOverrides.cca(str,str.length - 1) == 61) str = HxOverrides.substr(str,0,-1);
-	}
-	return new haxe_crypto_BaseCode(haxe_crypto_Base64.BYTES).decodeBytes(haxe_io_Bytes.ofString(str));
-};
-var haxe_crypto_BaseCode = function(base) {
-	var len = base.length;
-	var nbits = 1;
-	while(len > 1 << nbits) ++nbits;
-	if(nbits > 8 || len != 1 << nbits) {
-		throw new js__$Boot_HaxeError("BaseCode : base length must be a power of two.");
-	}
-	this.base = base;
-	this.nbits = nbits;
-};
-$hxClasses["haxe.crypto.BaseCode"] = haxe_crypto_BaseCode;
-haxe_crypto_BaseCode.__name__ = ["haxe","crypto","BaseCode"];
-haxe_crypto_BaseCode.encode = function(s,base) {
-	return new haxe_crypto_BaseCode(haxe_io_Bytes.ofString(base)).encodeString(s);
-};
-haxe_crypto_BaseCode.decode = function(s,base) {
-	return new haxe_crypto_BaseCode(haxe_io_Bytes.ofString(base)).decodeString(s);
-};
-haxe_crypto_BaseCode.prototype = {
-	base: null
-	,nbits: null
-	,tbl: null
-	,encodeBytes: function(b) {
-		var nbits = this.nbits;
-		var base = this.base;
-		var size = b.length * 8 / nbits | 0;
-		var out = new haxe_io_Bytes(new ArrayBuffer(size + (b.length * 8 % nbits == 0?0:1)));
-		var buf = 0;
-		var curbits = 0;
-		var mask = (1 << nbits) - 1;
-		var pin = 0;
-		var pout = 0;
-		while(pout < size) {
-			while(curbits < nbits) {
-				curbits += 8;
-				buf <<= 8;
-				buf |= b.b[pin++];
-			}
-			curbits -= nbits;
-			out.b[pout++] = base.b[buf >> curbits & mask] & 255;
-		}
-		if(curbits > 0) {
-			out.b[pout++] = base.b[buf << nbits - curbits & mask] & 255;
-		}
-		return out;
-	}
-	,initTable: function() {
-		var tbl = [];
-		var _g = 0;
-		while(_g < 256) tbl[_g++] = -1;
-		var _g1 = 0;
-		var _g2 = this.base.length;
-		while(_g1 < _g2) {
-			var i = _g1++;
-			tbl[this.base.b[i]] = i;
-		}
-		this.tbl = tbl;
-	}
-	,decodeBytes: function(b) {
-		var nbits = this.nbits;
-		if(this.tbl == null) {
-			this.initTable();
-		}
-		var tbl = this.tbl;
-		var size = b.length * nbits >> 3;
-		var out = new haxe_io_Bytes(new ArrayBuffer(size));
-		var buf = 0;
-		var curbits = 0;
-		var pin = 0;
-		var pout = 0;
-		while(pout < size) {
-			while(curbits < 8) {
-				curbits += nbits;
-				buf <<= nbits;
-				var i = tbl[b.b[pin++]];
-				if(i == -1) {
-					throw new js__$Boot_HaxeError("BaseCode : invalid encoded char");
-				}
-				buf |= i;
-			}
-			curbits -= 8;
-			out.b[pout++] = buf >> curbits & 255 & 255;
-		}
-		return out;
-	}
-	,encodeString: function(s) {
-		return this.encodeBytes(haxe_io_Bytes.ofString(s)).toString();
-	}
-	,decodeString: function(s) {
-		return this.decodeBytes(haxe_io_Bytes.ofString(s)).toString();
-	}
-	,__class__: haxe_crypto_BaseCode
-};
 var haxe_ds_BalancedTree = function() {
 };
 $hxClasses["haxe.ds.BalancedTree"] = haxe_ds_BalancedTree;
@@ -6357,12 +6026,6 @@ haxe_ds_IntMap.prototype = {
 	}
 	,__class__: haxe_ds_IntMap
 };
-var haxe_ds_Option = $hxClasses["haxe.ds.Option"] = { __ename__ : ["haxe","ds","Option"], __constructs__ : ["Some","None"] };
-haxe_ds_Option.Some = function(v) { var $x = ["Some",0,v]; $x.__enum__ = haxe_ds_Option; $x.toString = $estr; return $x; };
-haxe_ds_Option.None = ["None",1];
-haxe_ds_Option.None.toString = $estr;
-haxe_ds_Option.None.__enum__ = haxe_ds_Option;
-haxe_ds_Option.__empty_constructs__ = [haxe_ds_Option.None];
 var haxe_ds__$StringMap_StringMapIterator = function(map,keys) {
 	this.map = map;
 	this.keys = keys;
@@ -6613,34 +6276,213 @@ haxe_ds_WeakMap.prototype = {
 	}
 	,__class__: haxe_ds_WeakMap
 };
-var haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$ = {};
-$hxClasses["haxe.io._ArrayBufferView.ArrayBufferView_Impl_"] = haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$;
-haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$.__name__ = ["haxe","io","_ArrayBufferView","ArrayBufferView_Impl_"];
-haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$.__properties__ = {get_byteLength:"get_byteLength",get_byteOffset:"get_byteOffset",get_buffer:"get_buffer",get_EMULATED:"get_EMULATED"}
-haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$.get_EMULATED = function() {
-	return ArrayBuffer == js_html_compat_ArrayBuffer;
+var haxe_io_Bytes = function(data) {
+	this.length = data.byteLength;
+	this.b = new Uint8Array(data);
+	this.b.bufferValue = data;
+	data.hxBytes = this;
+	data.bytes = this.b;
 };
-haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$._new = function(size) {
-	var this1 = new Uint8Array(size);
-	return this1;
+$hxClasses["haxe.io.Bytes"] = haxe_io_Bytes;
+haxe_io_Bytes.__name__ = ["haxe","io","Bytes"];
+haxe_io_Bytes.alloc = function(length) {
+	return new haxe_io_Bytes(new ArrayBuffer(length));
 };
-haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$.get_byteOffset = function(this1) {
-	return this1.byteOffset;
+haxe_io_Bytes.ofString = function(s) {
+	var a = [];
+	var i = 0;
+	while(i < s.length) {
+		var c = s.charCodeAt(i++);
+		if(55296 <= c && c <= 56319) {
+			c = c - 55232 << 10 | s.charCodeAt(i++) & 1023;
+		}
+		if(c <= 127) {
+			a.push(c);
+		} else if(c <= 2047) {
+			a.push(192 | c >> 6);
+			a.push(128 | c & 63);
+		} else if(c <= 65535) {
+			a.push(224 | c >> 12);
+			a.push(128 | c >> 6 & 63);
+			a.push(128 | c & 63);
+		} else {
+			a.push(240 | c >> 18);
+			a.push(128 | c >> 12 & 63);
+			a.push(128 | c >> 6 & 63);
+			a.push(128 | c & 63);
+		}
+	}
+	return new haxe_io_Bytes(new Uint8Array(a).buffer);
 };
-haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$.get_byteLength = function(this1) {
-	return this1.byteLength;
+haxe_io_Bytes.ofData = function(b) {
+	var hb = b.hxBytes;
+	if(hb != null) {
+		return hb;
+	}
+	return new haxe_io_Bytes(b);
 };
-haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$.get_buffer = function(this1) {
-	return haxe_io_Bytes.ofData(this1.buffer);
+haxe_io_Bytes.fastGet = function(b,pos) {
+	return b.bytes[pos];
 };
-haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$.sub = function(this1,begin,length) {
-	return new Uint8Array(this1.buffer.slice(begin,length == null?null:begin + length));
-};
-haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$.getData = function(this1) {
-	return this1;
-};
-haxe_io__$ArrayBufferView_ArrayBufferView_$Impl_$.fromData = function(a) {
-	return a;
+haxe_io_Bytes.prototype = {
+	length: null
+	,b: null
+	,data: null
+	,get: function(pos) {
+		return this.b[pos];
+	}
+	,set: function(pos,v) {
+		this.b[pos] = v & 255;
+	}
+	,blit: function(pos,src,srcpos,len) {
+		if(pos < 0 || srcpos < 0 || len < 0 || pos + len > this.length || srcpos + len > src.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		if(srcpos == 0 && len == src.length) {
+			this.b.set(src.b,pos);
+		} else {
+			this.b.set(src.b.subarray(srcpos,srcpos + len),pos);
+		}
+	}
+	,fill: function(pos,len,value) {
+		var _g1 = 0;
+		while(_g1 < len) {
+			++_g1;
+			this.b[pos++] = value & 255;
+		}
+	}
+	,sub: function(pos,len) {
+		if(pos < 0 || len < 0 || pos + len > this.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		return new haxe_io_Bytes(this.b.buffer.slice(pos + this.b.byteOffset,pos + this.b.byteOffset + len));
+	}
+	,compare: function(other) {
+		var b1 = this.b;
+		var b2 = other.b;
+		var _g1 = 0;
+		var _g = this.length < other.length?this.length:other.length;
+		while(_g1 < _g) {
+			var i = _g1++;
+			if(b1[i] != b2[i]) {
+				return b1[i] - b2[i];
+			}
+		}
+		return this.length - other.length;
+	}
+	,initData: function() {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+	}
+	,getDouble: function(pos) {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+		return this.data.getFloat64(pos,true);
+	}
+	,getFloat: function(pos) {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+		return this.data.getFloat32(pos,true);
+	}
+	,setDouble: function(pos,v) {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+		this.data.setFloat64(pos,v,true);
+	}
+	,setFloat: function(pos,v) {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+		this.data.setFloat32(pos,v,true);
+	}
+	,getUInt16: function(pos) {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+		return this.data.getUint16(pos,true);
+	}
+	,setUInt16: function(pos,v) {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+		this.data.setUint16(pos,v,true);
+	}
+	,getInt32: function(pos) {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+		return this.data.getInt32(pos,true);
+	}
+	,setInt32: function(pos,v) {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+		this.data.setInt32(pos,v,true);
+	}
+	,getInt64: function(pos) {
+		return new haxe__$Int64__$_$_$Int64(this.getInt32(pos + 4),this.getInt32(pos));
+	}
+	,setInt64: function(pos,v) {
+		this.setInt32(pos,v.low);
+		this.setInt32(pos + 4,v.high);
+	}
+	,getString: function(pos,len) {
+		if(pos < 0 || len < 0 || pos + len > this.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		var s = "";
+		var b = this.b;
+		var fcc = String.fromCharCode;
+		var i = pos;
+		var max = pos + len;
+		while(i < max) {
+			var c = b[i++];
+			if(c < 128) {
+				if(c == 0) {
+					break;
+				}
+				s += fcc(c);
+			} else if(c < 224) {
+				s += fcc((c & 63) << 6 | b[i++] & 127);
+			} else if(c < 240) {
+				s += fcc((c & 31) << 12 | (b[i++] & 127) << 6 | b[i++] & 127);
+			} else {
+				var u = (c & 15) << 18 | (b[i++] & 127) << 12 | (b[i++] & 127) << 6 | b[i++] & 127;
+				s += fcc((u >> 10) + 55232);
+				s += fcc(u & 1023 | 56320);
+			}
+		}
+		return s;
+	}
+	,readString: function(pos,len) {
+		return this.getString(pos,len);
+	}
+	,toString: function() {
+		return this.getString(0,this.length);
+	}
+	,toHex: function() {
+		var s_b = "";
+		var chars = [];
+		var _g1 = 0;
+		var _g = "0123456789abcdef".length;
+		while(_g1 < _g) chars.push(HxOverrides.cca("0123456789abcdef",_g1++));
+		var _g11 = 0;
+		var _g2 = this.length;
+		while(_g11 < _g2) {
+			var c = this.b[_g11++];
+			s_b += String.fromCharCode(chars[c >> 4]);
+			s_b += String.fromCharCode(chars[c & 15]);
+		}
+		return s_b;
+	}
+	,getData: function() {
+		return this.b.bufferValue;
+	}
+	,__class__: haxe_io_Bytes
 };
 var haxe_io_BytesBuffer = function() {
 	this.b = [];
@@ -7219,68 +7061,6 @@ haxe_io_FPHelper.doubleToI64 = function(v) {
 		i64.high = (v < 0?-2147483648:0) | exp + 1023 << 20 | (sig / 4294967296.0 | 0);
 	}
 	return i64;
-};
-var haxe_io__$Float32Array_Float32Array_$Impl_$ = {};
-$hxClasses["haxe.io._Float32Array.Float32Array_Impl_"] = haxe_io__$Float32Array_Float32Array_$Impl_$;
-haxe_io__$Float32Array_Float32Array_$Impl_$.__name__ = ["haxe","io","_Float32Array","Float32Array_Impl_"];
-haxe_io__$Float32Array_Float32Array_$Impl_$.__properties__ = {get_view:"get_view",get_length:"get_length"}
-haxe_io__$Float32Array_Float32Array_$Impl_$._new = function(elements) {
-	return new Float32Array(elements);
-};
-haxe_io__$Float32Array_Float32Array_$Impl_$.get_length = function(this1) {
-	return this1.length;
-};
-haxe_io__$Float32Array_Float32Array_$Impl_$.get_view = function(this1) {
-	return this1;
-};
-haxe_io__$Float32Array_Float32Array_$Impl_$.get = function(this1,index) {
-	return this1[index];
-};
-haxe_io__$Float32Array_Float32Array_$Impl_$.set = function(this1,index,value) {
-	return this1[index] = value;
-};
-haxe_io__$Float32Array_Float32Array_$Impl_$.sub = function(this1,begin,length) {
-	return this1.subarray(begin,length == null?this1.length:begin + length);
-};
-haxe_io__$Float32Array_Float32Array_$Impl_$.subarray = function(this1,begin,end) {
-	return this1.subarray(begin,end);
-};
-haxe_io__$Float32Array_Float32Array_$Impl_$.getData = function(this1) {
-	return this1;
-};
-haxe_io__$Float32Array_Float32Array_$Impl_$.fromData = function(d) {
-	return d;
-};
-haxe_io__$Float32Array_Float32Array_$Impl_$.fromArray = function(a,pos,length) {
-	if(pos == null) {
-		pos = 0;
-	}
-	if(length == null) {
-		length = a.length - pos;
-	}
-	if(pos < 0 || length < 0 || pos + length > a.length) {
-		throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
-	}
-	if(pos == 0 && length == a.length) {
-		return new Float32Array(a);
-	}
-	var i = new Float32Array(a.length);
-	var _g1 = 0;
-	var _g = length;
-	while(_g1 < _g) {
-		var idx = _g1++;
-		i[idx] = a[idx + pos];
-	}
-	return i;
-};
-haxe_io__$Float32Array_Float32Array_$Impl_$.fromBytes = function(bytes,bytePos,length) {
-	if(bytePos == null) {
-		bytePos = 0;
-	}
-	if(length == null) {
-		length = bytes.length - bytePos >> 2;
-	}
-	return new Float32Array(bytes.b.bufferValue,bytePos,length);
 };
 var haxe_io_StringInput = function(s) {
 	haxe_io_BytesInput.call(this,haxe_io_Bytes.ofString(s));
@@ -10799,13 +10579,16 @@ kha_Image.fromImage = function(image,readable) {
 		return img1;
 	}
 };
-kha_Image.fromFloats = function(data,width,height,readable,halfFloat) {
-	if(halfFloat == null) {
-		halfFloat = false;
+kha_Image.fromBytes = function(bytes,width,height,format,usage) {
+	if(format == null) {
+		format = kha_graphics4_TextureFormat.RGBA32;
+	}
+	if(usage == null) {
+		usage = kha_graphics4_Usage.StaticUsage;
 	}
 	if(kha_SystemImpl.gl != null) {
-		var img = new kha_WebGLImage(width,height,halfFloat?kha_graphics4_TextureFormat.RGBA64:kha_graphics4_TextureFormat.RGBA128,false,0);
-		img.image = data;
+		var img = new kha_WebGLImage(width,height,format,false,0);
+		img.image = img.bytesToArray(bytes);
 		img.createTexture();
 		return img;
 	}
@@ -13366,6 +13149,24 @@ kha_WebGLImage.upperPowerOfTwo = function(v) {
 	v |= v >>> 16;
 	return ++v;
 };
+kha_WebGLImage.formatByteSize = function(format) {
+	switch(format[1]) {
+	case 0:
+		return 4;
+	case 1:
+		return 1;
+	case 2:
+		return 16;
+	case 3:
+		return 2;
+	case 4:
+		return 8;
+	case 5:
+		return 4;
+	case 6:
+		return 2;
+	}
+};
 kha_WebGLImage.__super__ = kha_Image;
 kha_WebGLImage.prototype = $extend(kha_Image.prototype,{
 	image: null
@@ -13378,6 +13179,7 @@ kha_WebGLImage.prototype = $extend(kha_Image.prototype,{
 	,frameBuffer: null
 	,renderBuffer: null
 	,texture: null
+	,depthTexture: null
 	,graphics1: null
 	,graphics2: null
 	,graphics4: null
@@ -13466,6 +13268,12 @@ kha_WebGLImage.prototype = $extend(kha_Image.prototype,{
 			case 4:
 				kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_realWidth(),this.get_realHeight(),0,6408,kha_SystemImpl.halfFloat.HALF_FLOAT_OES,null);
 				break;
+			case 5:
+				kha_SystemImpl.gl.texImage2D(3553,0,6406,this.get_realWidth(),this.get_realHeight(),0,6406,5126,null);
+				break;
+			case 6:
+				kha_SystemImpl.gl.texImage2D(3553,0,6406,this.get_realWidth(),this.get_realHeight(),0,6406,kha_SystemImpl.halfFloat.HALF_FLOAT_OES,null);
+				break;
 			default:
 				kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_realWidth(),this.get_realHeight(),0,6408,5121,null);
 			}
@@ -13481,33 +13289,14 @@ kha_WebGLImage.prototype = $extend(kha_Image.prototype,{
 			} else {
 				kha_SystemImpl.gl.framebufferTexture2D(36160,36064,3553,this.texture,0);
 			}
-			var _g1 = this.depthStencilFormat;
-			switch(_g1) {
-			case 0:
-				break;
-			case 1:
-				this.renderBuffer = kha_SystemImpl.gl.createRenderbuffer();
-				kha_SystemImpl.gl.bindRenderbuffer(36161,this.renderBuffer);
-				kha_SystemImpl.gl.renderbufferStorage(36161,33189,this.get_realWidth(),this.get_realHeight());
-				kha_SystemImpl.gl.framebufferRenderbuffer(36160,36096,36161,this.renderBuffer);
-				break;
-			case 2:
-				this.createDepthStencilBuffer();
-				break;
-			case 3:
-				this.createDepthStencilBuffer();
-				break;
-			case 4:
-				this.createDepthStencilBuffer();
-				break;
-			}
+			this.initDepthStencilBuffer(this.depthStencilFormat);
 			kha_SystemImpl.gl.bindRenderbuffer(36161,null);
 			kha_SystemImpl.gl.bindFramebuffer(36160,null);
 		} else if(this.video != null) {
 			kha_SystemImpl.gl.texImage2D(3553,0,6408,6408,5121,this.video);
 		} else {
-			var _g2 = this.format;
-			switch(_g2[1]) {
+			var _g1 = this.format;
+			switch(_g1[1]) {
 			case 0:
 				kha_SystemImpl.gl.texImage2D(3553,0,6408,6408,5121,this.image);
 				break;
@@ -13517,17 +13306,59 @@ kha_WebGLImage.prototype = $extend(kha_Image.prototype,{
 			case 4:
 				kha_SystemImpl.gl.texImage2D(3553,0,6408,this.myWidth,this.myHeight,0,6408,kha_SystemImpl.halfFloat.HALF_FLOAT_OES,this.image);
 				break;
+			case 5:
+				kha_SystemImpl.gl.texImage2D(3553,0,6406,this.myWidth,this.myHeight,0,6406,5126,this.image);
+				break;
+			case 6:
+				kha_SystemImpl.gl.texImage2D(3553,0,6406,this.myWidth,this.myHeight,0,6406,kha_SystemImpl.halfFloat.HALF_FLOAT_OES,this.image);
+				break;
 			default:
 				kha_SystemImpl.gl.texImage2D(3553,0,6408,6408,5121,this.image);
 			}
 		}
 		kha_SystemImpl.gl.bindTexture(3553,null);
 	}
-	,createDepthStencilBuffer: function() {
-		this.renderBuffer = kha_SystemImpl.gl.createRenderbuffer();
-		kha_SystemImpl.gl.bindRenderbuffer(36161,this.renderBuffer);
-		kha_SystemImpl.gl.renderbufferStorage(36161,34041,this.get_realWidth(),this.get_realHeight());
-		kha_SystemImpl.gl.framebufferRenderbuffer(36160,33306,36161,this.renderBuffer);
+	,initDepthStencilBuffer: function(depthStencilFormat) {
+		switch(depthStencilFormat) {
+		case 0:
+			break;
+		case 1:
+			if(kha_SystemImpl.depthTexture == null) {
+				this.renderBuffer = kha_SystemImpl.gl.createRenderbuffer();
+				kha_SystemImpl.gl.bindRenderbuffer(36161,this.renderBuffer);
+				kha_SystemImpl.gl.renderbufferStorage(36161,33189,this.get_realWidth(),this.get_realHeight());
+				kha_SystemImpl.gl.framebufferRenderbuffer(36160,36096,36161,this.renderBuffer);
+			} else {
+				this.depthTexture = kha_SystemImpl.gl.createTexture();
+				kha_SystemImpl.gl.bindTexture(3553,this.depthTexture);
+				kha_SystemImpl.gl.texImage2D(3553,0,6402,this.get_realWidth(),this.get_realHeight(),0,6402,5125,null);
+				kha_SystemImpl.gl.texParameteri(3553,10240,9728);
+				kha_SystemImpl.gl.texParameteri(3553,10241,9728);
+				kha_SystemImpl.gl.texParameteri(3553,10242,33071);
+				kha_SystemImpl.gl.texParameteri(3553,10243,33071);
+				kha_SystemImpl.gl.bindFramebuffer(36160,this.frameBuffer);
+				kha_SystemImpl.gl.framebufferTexture2D(36160,36096,3553,this.depthTexture,0);
+			}
+			break;
+		case 2:case 3:case 4:
+			if(kha_SystemImpl.depthTexture == null) {
+				this.renderBuffer = kha_SystemImpl.gl.createRenderbuffer();
+				kha_SystemImpl.gl.bindRenderbuffer(36161,this.renderBuffer);
+				kha_SystemImpl.gl.renderbufferStorage(36161,34041,this.get_realWidth(),this.get_realHeight());
+				kha_SystemImpl.gl.framebufferRenderbuffer(36160,33306,36161,this.renderBuffer);
+			} else {
+				this.depthTexture = kha_SystemImpl.gl.createTexture();
+				kha_SystemImpl.gl.bindTexture(3553,this.depthTexture);
+				kha_SystemImpl.gl.texImage2D(3553,0,34041,this.get_realWidth(),this.get_realHeight(),0,34041,kha_SystemImpl.depthTexture.UNSIGNED_INT_24_8_WEBGL,null);
+				kha_SystemImpl.gl.texParameteri(3553,10240,9728);
+				kha_SystemImpl.gl.texParameteri(3553,10241,9728);
+				kha_SystemImpl.gl.texParameteri(3553,10242,33071);
+				kha_SystemImpl.gl.texParameteri(3553,10243,33071);
+				kha_SystemImpl.gl.bindFramebuffer(36160,this.frameBuffer);
+				kha_SystemImpl.gl.framebufferTexture2D(36160,33306,3553,this.depthTexture,0);
+			}
+			break;
+		}
 	}
 	,set: function(stage) {
 		kha_SystemImpl.gl.activeTexture(33984 + stage);
@@ -13536,12 +13367,26 @@ kha_WebGLImage.prototype = $extend(kha_Image.prototype,{
 			kha_SystemImpl.gl.texImage2D(3553,0,6408,6408,5121,this.video);
 		}
 	}
+	,setDepth: function(stage) {
+		kha_SystemImpl.gl.activeTexture(33984 + stage);
+		kha_SystemImpl.gl.bindTexture(3553,this.depthTexture);
+	}
+	,bytesToArray: function(bytes) {
+		switch(this.format[1]) {
+		case 0:case 1:
+			return new Uint8Array(bytes.b.bufferValue);
+		case 2:case 4:case 5:case 6:
+			return new Float32Array(bytes.b.bufferValue);
+		default:
+			return new Uint8Array(bytes.b.bufferValue);
+		}
+	}
 	,bytes: null
 	,lock: function(level) {
 		if(level == null) {
 			level = 0;
 		}
-		this.bytes = new haxe_io_Bytes(new ArrayBuffer(this.format == kha_graphics4_TextureFormat.RGBA32?4 * this.get_width() * this.get_height():this.format == kha_graphics4_TextureFormat.RGBA128?16 * this.get_width() * this.get_height():this.get_width() * this.get_height()));
+		this.bytes = new haxe_io_Bytes(new ArrayBuffer(kha_WebGLImage.formatByteSize(this.format) * this.get_width() * this.get_height()));
 		return this.bytes;
 	}
 	,unlock: function() {
@@ -13554,10 +13399,10 @@ kha_WebGLImage.prototype = $extend(kha_Image.prototype,{
 			kha_SystemImpl.gl.texParameteri(3553,10243,33071);
 			switch(this.format[1]) {
 			case 0:
-				kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_width(),this.get_height(),0,6408,5121,new Uint8Array(this.bytes.b.bufferValue));
+				kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_width(),this.get_height(),0,6408,5121,this.bytesToArray(this.bytes));
 				break;
 			case 1:
-				kha_SystemImpl.gl.texImage2D(3553,0,6409,this.get_width(),this.get_height(),0,6409,5121,new Uint8Array(this.bytes.b.bufferValue));
+				kha_SystemImpl.gl.texImage2D(3553,0,6409,this.get_width(),this.get_height(),0,6409,5121,this.bytesToArray(this.bytes));
 				if(kha_SystemImpl.gl.getError() == 1282) {
 					var rgbaBytes = new haxe_io_Bytes(new ArrayBuffer(this.get_width() * this.get_height() * 4));
 					var _g1 = 0;
@@ -13575,14 +13420,23 @@ kha_WebGLImage.prototype = $extend(kha_Image.prototype,{
 							rgbaBytes.b[y * this.get_width() * 4 + x * 4 + 3] = 255;
 						}
 					}
-					kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_width(),this.get_height(),0,6408,5121,new Uint8Array(rgbaBytes.b.bufferValue));
+					kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_width(),this.get_height(),0,6408,5121,this.bytesToArray(rgbaBytes));
 				}
 				break;
 			case 2:
-				kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_width(),this.get_height(),0,6408,5126,new Uint8Array(this.bytes.b.bufferValue));
+				kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_width(),this.get_height(),0,6408,5126,this.bytesToArray(this.bytes));
+				break;
+			case 4:
+				kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_width(),this.get_height(),0,6408,kha_SystemImpl.halfFloat.HALF_FLOAT_OES,this.bytesToArray(this.bytes));
+				break;
+			case 5:
+				kha_SystemImpl.gl.texImage2D(3553,0,6406,this.get_width(),this.get_height(),0,6406,5126,this.bytesToArray(this.bytes));
+				break;
+			case 6:
+				kha_SystemImpl.gl.texImage2D(3553,0,6406,this.get_width(),this.get_height(),0,6406,kha_SystemImpl.halfFloat.HALF_FLOAT_OES,this.bytesToArray(this.bytes));
 				break;
 			default:
-				kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_width(),this.get_height(),0,6408,5121,new Uint8Array(this.bytes.b.bufferValue));
+				kha_SystemImpl.gl.texImage2D(3553,0,6408,this.get_width(),this.get_height(),0,6408,5121,this.bytesToArray(this.bytes));
 			}
 			kha_SystemImpl.gl.bindTexture(3553,null);
 			this.bytes = null;
@@ -24288,6 +24142,7 @@ kha_graphics4_Graphics.prototype = {
 	,setVertexBuffers: null
 	,setIndexBuffer: null
 	,setTexture: null
+	,setTextureDepth: null
 	,setVideoTexture: null
 	,setTextureParameters: null
 	,createCubeMap: null
@@ -24986,7 +24841,7 @@ kha_graphics4_TextShaderPainter.prototype = {
 		this.bilinear = bilinear;
 	}
 	,setFont: function(font) {
-		this.font = js_Boot.__cast(font.kravur , kha_Kravur);
+		this.font = js_Boot.__cast(font , kha_Kravur);
 	}
 	,text: null
 	,startString: function(text) {
@@ -25788,7 +25643,7 @@ kha_graphics4_TextureFilter.AnisotropicFilter = ["AnisotropicFilter",2];
 kha_graphics4_TextureFilter.AnisotropicFilter.toString = $estr;
 kha_graphics4_TextureFilter.AnisotropicFilter.__enum__ = kha_graphics4_TextureFilter;
 kha_graphics4_TextureFilter.__empty_constructs__ = [kha_graphics4_TextureFilter.PointFilter,kha_graphics4_TextureFilter.LinearFilter,kha_graphics4_TextureFilter.AnisotropicFilter];
-var kha_graphics4_TextureFormat = $hxClasses["kha.graphics4.TextureFormat"] = { __ename__ : ["kha","graphics4","TextureFormat"], __constructs__ : ["RGBA32","L8","RGBA128","DEPTH16","RGBA64"] };
+var kha_graphics4_TextureFormat = $hxClasses["kha.graphics4.TextureFormat"] = { __ename__ : ["kha","graphics4","TextureFormat"], __constructs__ : ["RGBA32","L8","RGBA128","DEPTH16","RGBA64","A32","A16"] };
 kha_graphics4_TextureFormat.RGBA32 = ["RGBA32",0];
 kha_graphics4_TextureFormat.RGBA32.toString = $estr;
 kha_graphics4_TextureFormat.RGBA32.__enum__ = kha_graphics4_TextureFormat;
@@ -25804,7 +25659,13 @@ kha_graphics4_TextureFormat.DEPTH16.__enum__ = kha_graphics4_TextureFormat;
 kha_graphics4_TextureFormat.RGBA64 = ["RGBA64",4];
 kha_graphics4_TextureFormat.RGBA64.toString = $estr;
 kha_graphics4_TextureFormat.RGBA64.__enum__ = kha_graphics4_TextureFormat;
-kha_graphics4_TextureFormat.__empty_constructs__ = [kha_graphics4_TextureFormat.RGBA32,kha_graphics4_TextureFormat.L8,kha_graphics4_TextureFormat.RGBA128,kha_graphics4_TextureFormat.DEPTH16,kha_graphics4_TextureFormat.RGBA64];
+kha_graphics4_TextureFormat.A32 = ["A32",5];
+kha_graphics4_TextureFormat.A32.toString = $estr;
+kha_graphics4_TextureFormat.A32.__enum__ = kha_graphics4_TextureFormat;
+kha_graphics4_TextureFormat.A16 = ["A16",6];
+kha_graphics4_TextureFormat.A16.toString = $estr;
+kha_graphics4_TextureFormat.A16.__enum__ = kha_graphics4_TextureFormat;
+kha_graphics4_TextureFormat.__empty_constructs__ = [kha_graphics4_TextureFormat.RGBA32,kha_graphics4_TextureFormat.L8,kha_graphics4_TextureFormat.RGBA128,kha_graphics4_TextureFormat.DEPTH16,kha_graphics4_TextureFormat.RGBA64,kha_graphics4_TextureFormat.A32,kha_graphics4_TextureFormat.A16];
 var kha_graphics4_TextureUnit = function() { };
 $hxClasses["kha.graphics4.TextureUnit"] = kha_graphics4_TextureUnit;
 kha_graphics4_TextureUnit.__name__ = ["kha","graphics4","TextureUnit"];
@@ -27599,6 +27460,9 @@ kha_js_graphics4_Graphics.prototype = {
 		} else {
 			(js_Boot.__cast(texture , kha_WebGLImage)).set((js_Boot.__cast(stage , kha_js_graphics4_TextureUnit)).value);
 		}
+	}
+	,setTextureDepth: function(stage,texture) {
+		(js_Boot.__cast(texture , kha_WebGLImage)).setDepth((js_Boot.__cast(stage , kha_js_graphics4_TextureUnit)).value);
 	}
 	,setVideoTexture: function(unit,texture) {
 		if(texture == null) {
@@ -29506,41 +29370,6 @@ libnoise_operator_ScaleBias.prototype = $extend(libnoise_ModuleBase.prototype,{
 	}
 	,__class__: libnoise_operator_ScaleBias
 });
-var libnoise_operator_ScaleCoords = function(input,x,y,z) {
-	libnoise_ModuleBase.call(this,4);
-	this.modules[0] = input;
-	this.modules[1] = x;
-	this.modules[2] = y;
-	this.modules[3] = z;
-};
-$hxClasses["libnoise.operator.ScaleCoords"] = libnoise_operator_ScaleCoords;
-libnoise_operator_ScaleCoords.__name__ = ["libnoise","operator","ScaleCoords"];
-libnoise_operator_ScaleCoords.__super__ = libnoise_ModuleBase;
-libnoise_operator_ScaleCoords.prototype = $extend(libnoise_ModuleBase.prototype,{
-	set_X: function(val) {
-		return this.modules[1] = val;
-	}
-	,get_X: function() {
-		return this.modules[1];
-	}
-	,set_Y: function(val) {
-		return this.modules[2] = val;
-	}
-	,get_Y: function() {
-		return this.modules[2];
-	}
-	,set_Z: function(val) {
-		return this.modules[3] = val;
-	}
-	,get_Z: function() {
-		return this.modules[3];
-	}
-	,getValue: function(x,y,z) {
-		return this.modules[0].getValue(x * this.modules[1].getValue(x,y,z),y * this.modules[2].getValue(x,y,z),z * this.modules[3].getValue(x,y,z));
-	}
-	,__class__: libnoise_operator_ScaleCoords
-	,__properties__: {set_Z:"set_Z",get_Z:"get_Z",set_Y:"set_Y",get_Y:"get_Y",set_X:"set_X",get_X:"get_X"}
-});
 var libnoise_operator_Select = function(min,max,fallOff,inputA,inputB,controller) {
 	if(fallOff == null) {
 		fallOff = 0.0;
@@ -29710,42 +29539,28 @@ modules_CircleWrap.prototype = $extend(libnoise_ModuleBase.prototype,{
 var thx_Arrays = function() { };
 $hxClasses["thx.Arrays"] = thx_Arrays;
 thx_Arrays.__name__ = ["thx","Arrays"];
-thx_Arrays.append = function(array,element) {
-	array.push(element);
-	return array;
-};
-thx_Arrays.appendIf = function(array,cond,element) {
-	if(cond) {
-		array.push(element);
-	}
-	return array;
-};
 thx_Arrays.after = function(array,element) {
 	return array.slice(array.indexOf(element) + 1);
 };
-thx_Arrays.each = function(arr,effect) {
-	var tmp = HxOverrides.iter(arr);
-	while(tmp.hasNext()) effect(tmp.next());
-};
-thx_Arrays.eachi = function(arr,effect) {
-	var _g1 = 0;
-	var _g = arr.length;
-	while(_g1 < _g) {
-		var i = _g1++;
-		effect(arr[i],i);
-	}
-};
 thx_Arrays.all = function(arr,predicate) {
-	var tmp = HxOverrides.iter(arr);
-	while(tmp.hasNext()) if(!predicate(tmp.next())) {
-		return false;
+	var _g = 0;
+	while(_g < arr.length) {
+		var element = arr[_g];
+		++_g;
+		if(!predicate(element)) {
+			return false;
+		}
 	}
 	return true;
 };
 thx_Arrays.any = function(arr,predicate) {
-	var tmp = HxOverrides.iter(arr);
-	while(tmp.hasNext()) if(predicate(tmp.next())) {
-		return true;
+	var _g = 0;
+	while(_g < arr.length) {
+		var element = arr[_g];
+		++_g;
+		if(predicate(element)) {
+			return true;
+		}
 	}
 	return false;
 };
@@ -29756,24 +29571,6 @@ thx_Arrays.at = function(arr,indexes) {
 };
 thx_Arrays.before = function(array,element) {
 	return array.slice(0,array.indexOf(element));
-};
-thx_Arrays.commonsFromStart = function(self,other,equality) {
-	if(null == equality) {
-		equality = thx_Functions.equality;
-	}
-	var count = 0;
-	var _g = 0;
-	var _g1 = thx_Arrays.zip(self,other);
-	while(_g < _g1.length) {
-		var pair = _g1[_g];
-		++_g;
-		if(equality(pair._0,pair._1)) {
-			++count;
-		} else {
-			break;
-		}
-	}
-	return self.slice(0,count);
 };
 thx_Arrays.compact = function(arr) {
 	return arr.filter(function(v) {
@@ -29808,13 +29605,6 @@ thx_Arrays.contains = function(array,element,eq) {
 		return false;
 	}
 };
-thx_Arrays.containsAll = function(array,elements,eq) {
-	var tmp = $iterator(elements)();
-	while(tmp.hasNext()) if(!thx_Arrays.contains(array,tmp.next(),eq)) {
-		return false;
-	}
-	return true;
-};
 thx_Arrays.containsAny = function(array,elements,eq) {
 	var tmp = $iterator(elements)();
 	while(tmp.hasNext()) if(thx_Arrays.contains(array,tmp.next(),eq)) {
@@ -29822,23 +29612,18 @@ thx_Arrays.containsAny = function(array,elements,eq) {
 	}
 	return false;
 };
-thx_Arrays.create = function(length,fillWith) {
-	var arr = new Array(length);
-	var _g1 = 0;
-	var _g = length;
-	while(_g1 < _g) {
-		var i = _g1++;
-		arr[i] = fillWith;
-	}
-	return arr;
-};
 thx_Arrays.cross = function(a,b) {
 	var r = [];
-	var tmp = HxOverrides.iter(a);
-	while(tmp.hasNext()) {
-		var va = tmp.next();
-		var tmp1 = HxOverrides.iter(b);
-		while(tmp1.hasNext()) r.push([va,tmp1.next()]);
+	var _g = 0;
+	while(_g < a.length) {
+		var va = a[_g];
+		++_g;
+		var _g1 = 0;
+		while(_g1 < b.length) {
+			var vb = b[_g1];
+			++_g1;
+			r.push([va,vb]);
+		}
 	}
 	return r;
 };
@@ -29851,13 +29636,14 @@ thx_Arrays.crossMulti = function(array) {
 		var array1 = acopy.shift();
 		var tresult = result;
 		result = [];
-		var tmp = HxOverrides.iter(array1);
-		while(tmp.hasNext()) {
-			var v1 = tmp.next();
-			var _g = 0;
-			while(_g < tresult.length) {
-				var ar = tresult[_g];
-				++_g;
+		var _g = 0;
+		while(_g < array1.length) {
+			var v1 = array1[_g];
+			++_g;
+			var _g1 = 0;
+			while(_g1 < tresult.length) {
+				var ar = tresult[_g1];
+				++_g1;
 				var t = ar.slice();
 				t.push(v1);
 				result.push(t);
@@ -29869,14 +29655,15 @@ thx_Arrays.crossMulti = function(array) {
 thx_Arrays.distinct = function(array,predicate) {
 	var result = [];
 	if(array.length <= 1) {
-		return array.slice();
+		return array;
 	}
 	if(null == predicate) {
 		predicate = thx_Functions.equality;
 	}
-	var tmp = HxOverrides.iter(array);
-	while(tmp.hasNext()) {
-		var v = [tmp.next()];
+	var _g = 0;
+	while(_g < array.length) {
+		var v = [array[_g]];
+		++_g;
 		if(!thx_Arrays.any(result,(function(v1) {
 			return function(r) {
 				return predicate(r,v1[0]);
@@ -29929,9 +29716,10 @@ thx_Arrays.extract = function(a,predicate) {
 };
 thx_Arrays.filterNull = function(a) {
 	var arr = [];
-	var tmp = HxOverrides.iter(a);
-	while(tmp.hasNext()) {
-		var v = tmp.next();
+	var _g = 0;
+	while(_g < a.length) {
+		var v = a[_g];
+		++_g;
 		if(null != v) {
 			arr.push(v);
 		}
@@ -29939,25 +29727,15 @@ thx_Arrays.filterNull = function(a) {
 	return arr;
 };
 thx_Arrays.find = function(array,predicate) {
-	var tmp = HxOverrides.iter(array);
-	while(tmp.hasNext()) {
-		var element = tmp.next();
+	var _g = 0;
+	while(_g < array.length) {
+		var element = array[_g];
+		++_g;
 		if(predicate(element)) {
 			return element;
 		}
 	}
 	return null;
-};
-thx_Arrays.findIndex = function(array,predicate) {
-	var _g1 = 0;
-	var _g = array.length;
-	while(_g1 < _g) {
-		var i = _g1++;
-		if(predicate(array[i])) {
-			return i;
-		}
-	}
-	return -1;
 };
 thx_Arrays.findLast = function(array,predicate) {
 	var len = array.length;
@@ -29997,28 +29775,6 @@ thx_Arrays.groupByAppend = function(arr,resolver,map) {
 	});
 	return map;
 };
-thx_Arrays.spanByIndex = function(arr,spanKey) {
-	var acc = [];
-	var cur = null;
-	var j = -1;
-	var _g1 = 0;
-	var _g = arr.length;
-	while(_g1 < _g) {
-		var i = _g1++;
-		var k = spanKey(i);
-		if(k == null) {
-			throw new thx_Error("spanKey function returned null for index " + i,null,{ fileName : "Arrays.hx", lineNumber : 465, className : "thx.Arrays", methodName : "spanByIndex"});
-		}
-		if(cur == k) {
-			acc[j].push(arr[i]);
-		} else {
-			cur = k;
-			++j;
-			acc.push([arr[i]]);
-		}
-	}
-	return acc;
-};
 thx_Arrays.hasElements = function(array) {
 	if(null != array) {
 		return array.length > 0;
@@ -30050,7 +29806,14 @@ thx_Arrays.last = function(array) {
 	return array[array.length - 1];
 };
 thx_Arrays.mapi = function(array,callback) {
-	return array.map(callback);
+	var r = [];
+	var _g1 = 0;
+	var _g = array.length;
+	while(_g1 < _g) {
+		var i = _g1++;
+		r.push(callback(array[i],i));
+	}
+	return r;
 };
 thx_Arrays.mapRight = function(array,callback) {
 	var i = array.length;
@@ -30064,8 +29827,12 @@ thx_Arrays.order = function(array,sort) {
 	return n;
 };
 thx_Arrays.pull = function(array,toRemove,equality) {
-	var tmp = HxOverrides.iter(toRemove);
-	while(tmp.hasNext()) thx_Arrays.removeAll(array,tmp.next(),equality);
+	var _g = 0;
+	while(_g < toRemove.length) {
+		var element = toRemove[_g];
+		++_g;
+		thx_Arrays.removeAll(array,element,equality);
+	}
 };
 thx_Arrays.pushIf = function(array,condition,value) {
 	if(condition) {
@@ -30100,11 +29867,6 @@ thx_Arrays.removeAll = function(array,element,equality) {
 };
 thx_Arrays.rest = function(array) {
 	return array.slice(1);
-};
-thx_Arrays.reversed = function(array) {
-	var result = array.slice();
-	result.reverse();
-	return result;
 };
 thx_Arrays.sample = function(array,n) {
 	var b = array.length;
@@ -30159,40 +29921,11 @@ thx_Arrays.splitBy = function(array,len) {
 	}
 	return res;
 };
-thx_Arrays.splitByPad = function(arr,len,pad) {
-	var res = thx_Arrays.splitBy(arr,len);
-	while(res[res.length - 1].length < len) res[res.length - 1].push(pad);
-	return res;
-};
 thx_Arrays.take = function(arr,n) {
 	return arr.slice(0,n);
 };
 thx_Arrays.takeLast = function(arr,n) {
 	return arr.slice(arr.length - n);
-};
-thx_Arrays.traverseOption = function(arr,f) {
-	var initial = haxe_ds_Option.Some([]);
-	return arr.reduce(function(acc,t) {
-		return thx_Options.ap(f(t),thx_Options.map(acc,function(ux) {
-			return function(u) {
-				ux.push(u);
-				return ux;
-			};
-		}));
-	},initial);
-};
-thx_Arrays.traverseValidation = function(arr,f,s) {
-	var initial = thx_Either.Right([]);
-	return arr.reduce(function(acc,t) {
-		return thx__$Validation_Validation_$Impl_$.ap(f(t),thx__$Validation_Validation_$Impl_$.ap(acc,thx_Either.Right(function(ux) {
-			return function(u) {
-				ux.push(u);
-				return ux;
-			};
-		}),function(e1,e2) {
-			throw new js__$Boot_HaxeError("Unreachable");
-		}),s);
-	},initial);
 };
 thx_Arrays.rotate = function(arr) {
 	var result = [];
@@ -30207,20 +29940,6 @@ thx_Arrays.rotate = function(arr) {
 		while(_g3 < _g2) row.push(arr[_g3++][i]);
 	}
 	return result;
-};
-thx_Arrays.sliding2 = function(arr,f) {
-	if(arr.length < 2) {
-		return [];
-	} else {
-		var result = [];
-		var _g1 = 0;
-		var _g = arr.length - 1;
-		while(_g1 < _g) {
-			var i = _g1++;
-			result.push(f(arr[i],arr[i + 1]));
-		}
-		return result;
-	}
 };
 thx_Arrays.unzip = function(array) {
 	var a1 = [];
@@ -30282,21 +30001,6 @@ thx_Arrays.zip = function(array1,array2) {
 		array.push({ _0 : array1[i], _1 : array2[i]});
 	}
 	return array;
-};
-thx_Arrays.withPrepend = function(arr,el) {
-	return [el].concat(arr);
-};
-thx_Arrays["with"] = function(arr,el) {
-	return arr.concat([el]);
-};
-thx_Arrays.withSlice = function(arr,other,start,length) {
-	if(length == null) {
-		length = 0;
-	}
-	return arr.slice(0,start).concat(other).concat(arr.slice(start + length));
-};
-thx_Arrays.withInsert = function(arr,el,pos) {
-	return arr.slice(0,pos).concat([el]).concat(arr.slice(pos));
 };
 thx_Arrays.zip3 = function(array1,array2,array3) {
 	var length = thx_ArrayInts.min([array1.length,array2.length,array3.length]);
@@ -30376,15 +30080,6 @@ thx_ArrayFloats.resize = function(array,length,fill) {
 	while(array.length < length) array.push(fill);
 	array.splice(length,array.length - length);
 	return array;
-};
-thx_ArrayFloats.standardDeviation = function(array) {
-	if(array.length < 2) {
-		return 0.0;
-	}
-	var mean = thx_ArrayFloats.average(array);
-	return Math.sqrt(array.reduce(function(acc,val) {
-		return acc + Math.pow(val - mean,2);
-	},0) / (array.length - 1));
 };
 thx_ArrayFloats.sum = function(arr) {
 	return arr.reduce(function(tot,v) {
@@ -30517,16 +30212,6 @@ thx_Bools.parse = function(v) {
 		}
 	}
 };
-thx_Bools.xor = function(a,b) {
-	return a != b;
-};
-thx_Bools.option = function(cond,a) {
-	if(cond) {
-		return haxe_ds_Option.Some(a);
-	} else {
-		return haxe_ds_Option.None;
-	}
-};
 var thx_Dates = function() { };
 $hxClasses["thx.Dates"] = thx_Dates;
 thx_Dates.__name__ = ["thx","Dates"];
@@ -30578,29 +30263,29 @@ thx_Dates.create = function(year,month,day,hour,minute,second) {
 			month = 11;
 			--year;
 		}
-		day = thx_Dates.daysInMonth(year,month);
+		day = thx_Dates.numDaysInMonth(month,year);
 	}
 	year += Math.floor(month / 12);
 	month %= 12;
 	if(month < 0) {
 		month += 12;
 	}
-	var days = thx_Dates.daysInMonth(year,month);
-	while(day > days) {
-		if(day > days) {
-			day -= days;
+	var daysInMonth = thx_Dates.numDaysInMonth(month,year);
+	while(day > daysInMonth) {
+		if(day > daysInMonth) {
+			day -= daysInMonth;
 			++month;
 		}
 		if(month > 11) {
 			month -= 12;
 			++year;
 		}
-		days = thx_Dates.daysInMonth(year,month);
+		daysInMonth = thx_Dates.numDaysInMonth(month,year);
 	}
 	return new Date(year,month,day,hour,minute,second);
 };
 thx_Dates.daysRange = function(start,end) {
-	if(thx_Dates.compare(end,start) < 0) {
+	if(end.getTime() < start.getTime()) {
 		return [];
 	}
 	var days = [];
@@ -30626,32 +30311,23 @@ thx_Dates.nearEquals = function(self,other,units,period) {
 	}
 	var min = thx_Dates.jump(self,period,-units);
 	var max = thx_Dates.jump(self,period,units);
-	if(thx_Dates.compare(min,other) <= 0) {
-		return thx_Dates.compare(max,other) >= 0;
+	if(min.getTime() <= other.getTime()) {
+		return max.getTime() >= other.getTime();
 	} else {
 		return false;
 	}
 };
-thx_Dates.greater = function(self,other) {
-	return thx_Dates.compare(self,other) > 0;
-};
 thx_Dates.more = function(self,other) {
-	return thx_Dates.compare(self,other) > 0;
+	return self.getTime() > other.getTime();
 };
 thx_Dates.less = function(self,other) {
-	return thx_Dates.compare(self,other) < 0;
-};
-thx_Dates.greaterEquals = function(self,other) {
-	return thx_Dates.compare(self,other) >= 0;
+	return self.getTime() < other.getTime();
 };
 thx_Dates.moreEqual = function(self,other) {
-	return thx_Dates.compare(self,other) >= 0;
-};
-thx_Dates.lessEquals = function(self,other) {
-	return thx_Dates.compare(self,other) <= 0;
+	return self.getTime() >= other.getTime();
 };
 thx_Dates.lessEqual = function(self,other) {
-	return thx_Dates.compare(self,other) <= 0;
+	return self.getTime() <= other.getTime();
 };
 thx_Dates.isLeapYear = function(year) {
 	if(year % 4 != 0) {
@@ -30665,7 +30341,7 @@ thx_Dates.isLeapYear = function(year) {
 thx_Dates.isInLeapYear = function(d) {
 	return thx_Dates.isLeapYear(d.getFullYear());
 };
-thx_Dates.daysInMonth = function(year,month) {
+thx_Dates.numDaysInMonth = function(month,year) {
 	switch(month) {
 	case 1:
 		if(thx_Dates.isLeapYear(year)) {
@@ -30682,21 +30358,15 @@ thx_Dates.daysInMonth = function(year,month) {
 		throw new js__$Boot_HaxeError("Invalid month \"" + month + "\".  Month should be a number, Jan=0, Dec=11");
 	}
 };
-thx_Dates.numDaysInMonth = function(month,year) {
-	return thx_Dates.daysInMonth(year,month);
-};
-thx_Dates.daysInThisMonth = function(d) {
-	return thx_Dates.daysInMonth(d.getFullYear(),d.getMonth());
-};
 thx_Dates.numDaysInThisMonth = function(d) {
-	return thx_Dates.daysInThisMonth(d);
+	return thx_Dates.numDaysInMonth(d.getMonth(),d.getFullYear());
 };
 thx_Dates.sameYear = function(self,other) {
 	return self.getFullYear() == other.getFullYear();
 };
 thx_Dates.sameMonth = function(self,other) {
 	if(thx_Dates.sameYear(self,other)) {
-		return self.getMonth() == other.getMonth();
+		return self.getFullYear() == other.getFullYear();
 	} else {
 		return false;
 	}
@@ -30870,6 +30540,29 @@ thx_Dates.withMinute = function(date,minute) {
 thx_Dates.withSecond = function(date,second) {
 	return thx_Dates.create(date.getFullYear(),date.getMonth(),date.getDate(),date.getHours(),date.getMinutes(),second);
 };
+var thx_TimePeriod = $hxClasses["thx.TimePeriod"] = { __ename__ : ["thx","TimePeriod"], __constructs__ : ["Second","Minute","Hour","Day","Week","Month","Year"] };
+thx_TimePeriod.Second = ["Second",0];
+thx_TimePeriod.Second.toString = $estr;
+thx_TimePeriod.Second.__enum__ = thx_TimePeriod;
+thx_TimePeriod.Minute = ["Minute",1];
+thx_TimePeriod.Minute.toString = $estr;
+thx_TimePeriod.Minute.__enum__ = thx_TimePeriod;
+thx_TimePeriod.Hour = ["Hour",2];
+thx_TimePeriod.Hour.toString = $estr;
+thx_TimePeriod.Hour.__enum__ = thx_TimePeriod;
+thx_TimePeriod.Day = ["Day",3];
+thx_TimePeriod.Day.toString = $estr;
+thx_TimePeriod.Day.__enum__ = thx_TimePeriod;
+thx_TimePeriod.Week = ["Week",4];
+thx_TimePeriod.Week.toString = $estr;
+thx_TimePeriod.Week.__enum__ = thx_TimePeriod;
+thx_TimePeriod.Month = ["Month",5];
+thx_TimePeriod.Month.toString = $estr;
+thx_TimePeriod.Month.__enum__ = thx_TimePeriod;
+thx_TimePeriod.Year = ["Year",6];
+thx_TimePeriod.Year.toString = $estr;
+thx_TimePeriod.Year.__enum__ = thx_TimePeriod;
+thx_TimePeriod.__empty_constructs__ = [thx_TimePeriod.Second,thx_TimePeriod.Minute,thx_TimePeriod.Hour,thx_TimePeriod.Day,thx_TimePeriod.Week,thx_TimePeriod.Month,thx_TimePeriod.Year];
 var thx_Dynamics = function() { };
 $hxClasses["thx.Dynamics"] = thx_Dynamics;
 thx_Dynamics.__name__ = ["thx","Dynamics"];
@@ -31175,13 +30868,9 @@ thx_Dynamics.string = function(v) {
 		case "Date":
 			return HxOverrides.dateStr(v);
 		case "String":
-			return v;
+			return thx_Strings.quote(v);
 		default:
-			if(js_Boot.__instanceof(v,haxe_IMap)) {
-				return thx_Maps.string(v);
-			} else {
-				return Std.string(v);
-			}
+			return Std.string(v);
 		}
 		break;
 	case 7:
@@ -31235,94 +30924,6 @@ thx_DynamicsT.tuples = function(o) {
 		return { _0 : key, _1 : Reflect.field(o,key)};
 	});
 };
-var thx_Either = $hxClasses["thx.Either"] = { __ename__ : ["thx","Either"], __constructs__ : ["Left","Right"] };
-thx_Either.Left = function(value) { var $x = ["Left",0,value]; $x.__enum__ = thx_Either; $x.toString = $estr; return $x; };
-thx_Either.Right = function(value) { var $x = ["Right",1,value]; $x.__enum__ = thx_Either; $x.toString = $estr; return $x; };
-thx_Either.__empty_constructs__ = [];
-var thx_Eithers = function() { };
-$hxClasses["thx.Eithers"] = thx_Eithers;
-thx_Eithers.__name__ = ["thx","Eithers"];
-thx_Eithers.isLeft = function(either) {
-	switch(either[1]) {
-	case 0:
-		return true;
-	case 1:
-		return false;
-	}
-};
-thx_Eithers.isRight = function(either) {
-	switch(either[1]) {
-	case 0:
-		return false;
-	case 1:
-		return true;
-	}
-};
-thx_Eithers.toLeft = function(either) {
-	switch(either[1]) {
-	case 0:
-		return haxe_ds_Option.Some(either[2]);
-	case 1:
-		return haxe_ds_Option.None;
-	}
-};
-thx_Eithers.toRight = function(either) {
-	switch(either[1]) {
-	case 0:
-		return haxe_ds_Option.None;
-	case 1:
-		return haxe_ds_Option.Some(either[2]);
-	}
-};
-thx_Eithers.toLeftUnsafe = function(either) {
-	switch(either[1]) {
-	case 0:
-		return either[2];
-	case 1:
-		return null;
-	}
-};
-thx_Eithers.toRightUnsafe = function(either) {
-	switch(either[1]) {
-	case 0:
-		return null;
-	case 1:
-		return either[2];
-	}
-};
-thx_Eithers.map = function(either,f) {
-	switch(either[1]) {
-	case 0:
-		return thx_Either.Left(either[2]);
-	case 1:
-		return thx_Either.Right(f(either[2]));
-	}
-};
-thx_Eithers.flatMap = function(either,f) {
-	switch(either[1]) {
-	case 0:
-		return thx_Either.Left(either[2]);
-	case 1:
-		return f(either[2]);
-	}
-};
-thx_Eithers.leftMap = function(either,f) {
-	switch(either[1]) {
-	case 0:
-		return thx_Either.Left(f(either[2]));
-	case 1:
-		return thx_Either.Right(either[2]);
-	}
-};
-thx_Eithers.orThrow = function(either,message) {
-	switch(either[1]) {
-	case 0:
-		throw new thx_Error("" + message + ": " + Std.string(either[2]),null,{ fileName : "Eithers.hx", lineNumber : 93, className : "thx.Eithers", methodName : "orThrow"});
-		break;
-	case 1:
-		return either[2];
-	}
-};
 var thx_Enums = function() { };
 $hxClasses["thx.Enums"] = thx_Enums;
 thx_Enums.__name__ = ["thx","Enums"];
@@ -31344,20 +30945,6 @@ thx_Enums.compare = function(a,b) {
 		return v;
 	}
 	return thx_Arrays.compare(a.slice(2),b.slice(2));
-};
-thx_Enums.min = function(a,b) {
-	if(thx_Enums.compare(a,b) < 0) {
-		return a;
-	} else {
-		return b;
-	}
-};
-thx_Enums.max = function(a,b) {
-	if(thx_Enums.compare(a,b) > 0) {
-		return a;
-	} else {
-		return b;
-	}
 };
 var thx_Error = function(message,stack,pos) {
 	Error.call(this,message);
@@ -31506,7 +31093,7 @@ thx_Floats.min = function(a,b) {
 };
 thx_Floats.nearEquals = function(a,b,tollerance) {
 	if(tollerance == null) {
-		tollerance = 1e-9;
+		tollerance = 10e-10;
 	}
 	if(isFinite(a)) {
 		return Math.abs(a - b) <= tollerance;
@@ -31524,7 +31111,7 @@ thx_Floats.nearEquals = function(a,b,tollerance) {
 };
 thx_Floats.nearEqualAngles = function(a,b,turn,tollerance) {
 	if(tollerance == null) {
-		tollerance = 1e-9;
+		tollerance = 10e-10;
 	}
 	if(turn == null) {
 		turn = 360.0;
@@ -31533,7 +31120,7 @@ thx_Floats.nearEqualAngles = function(a,b,turn,tollerance) {
 };
 thx_Floats.nearZero = function(n,tollerance) {
 	if(tollerance == null) {
-		tollerance = 1e-9;
+		tollerance = 10e-10;
 	}
 	return Math.abs(n) <= tollerance;
 };
@@ -31564,26 +31151,6 @@ thx_Floats.sign = function(value) {
 		return -1;
 	} else {
 		return 1;
-	}
-};
-thx_Floats.toString = function(v) {
-	return "" + v;
-};
-thx_Floats.toFloat = function(s) {
-	return thx_Floats.parse(s);
-};
-thx_Floats.trunc = function(value) {
-	if(value < 0.0) {
-		return Math.ceil(value);
-	} else {
-		return Math.floor(value);
-	}
-};
-thx_Floats.ftrunc = function(value) {
-	if(value < 0.0) {
-		return Math.ceil(value);
-	} else {
-		return Math.floor(value);
 	}
 };
 thx_Floats.wrap = function(v,min,max) {
@@ -31727,13 +31294,6 @@ thx_Functions2.memoize = function(callback,resolver) {
 		return result;
 	};
 };
-thx_Functions2.curry = function(f) {
-	return function(a) {
-		return function(b) {
-			return f(a,b);
-		};
-	};
-};
 thx_Functions2.negate = function(callback) {
 	return function(v1,v2) {
 		return !callback(v1,v2);
@@ -31768,74 +31328,14 @@ thx_Functions3.negate = function(callback) {
 		return !callback(v1,v2,v3);
 	};
 };
-thx_Functions3.curry = function(f) {
-	return function(a,b) {
-		return function(c) {
-			return f(a,b,c);
-		};
-	};
-};
-var thx_Functions4 = function() { };
-$hxClasses["thx.Functions4"] = thx_Functions4;
-thx_Functions4.__name__ = ["thx","Functions4"];
-thx_Functions4.curry = function(f) {
-	return function(a,b,c) {
-		return function(d) {
-			return f(a,b,c,d);
-		};
-	};
-};
-var thx_Functions5 = function() { };
-$hxClasses["thx.Functions5"] = thx_Functions5;
-thx_Functions5.__name__ = ["thx","Functions5"];
-thx_Functions5.curry = function(f) {
-	return function(a,b,c,d) {
-		return function(e) {
-			return f(a,b,c,d,e);
-		};
-	};
-};
-var thx_Functions6 = function() { };
-$hxClasses["thx.Functions6"] = thx_Functions6;
-thx_Functions6.__name__ = ["thx","Functions6"];
-thx_Functions6.curry = function(f) {
-	return function(a,b,c,d,e) {
-		return function(f0) {
-			return f(a,b,c,d,e,f0);
-		};
-	};
-};
-var thx_Functions7 = function() { };
-$hxClasses["thx.Functions7"] = thx_Functions7;
-thx_Functions7.__name__ = ["thx","Functions7"];
-thx_Functions7.curry = function(f) {
-	return function(a,b,c,d,e,f0) {
-		return function(g) {
-			return f(a,b,c,d,e,f0,g);
-		};
-	};
-};
-var thx_Functions8 = function() { };
-$hxClasses["thx.Functions8"] = thx_Functions8;
-thx_Functions8.__name__ = ["thx","Functions8"];
-thx_Functions8.curry = function(f) {
-	return function(a,b,c,d,e,f0,g) {
-		return function(h) {
-			return f(a,b,c,d,e,f0,g,h);
-		};
-	};
-};
-var thx__$Functions_Reader_$Impl_$ = {};
-$hxClasses["thx._Functions.Reader_Impl_"] = thx__$Functions_Reader_$Impl_$;
-thx__$Functions_Reader_$Impl_$.__name__ = ["thx","_Functions","Reader_Impl_"];
-thx__$Functions_Reader_$Impl_$.flatMap = function(this1,f) {
-	return function(a) {
-		return (f(this1(a)))(a);
-	};
-};
 var thx_Functions = function() { };
 $hxClasses["thx.Functions"] = thx_Functions;
 thx_Functions.__name__ = ["thx","Functions"];
+thx_Functions.constant = function(v) {
+	return function() {
+		return v;
+	};
+};
 thx_Functions.equality = function(a,b) {
 	return a == b;
 };
@@ -31844,17 +31344,6 @@ thx_Functions.identity = function(value) {
 };
 thx_Functions.noop = function() {
 };
-var thx_OrderingImpl = $hxClasses["thx.OrderingImpl"] = { __ename__ : ["thx","OrderingImpl"], __constructs__ : ["LT","GT","EQ"] };
-thx_OrderingImpl.LT = ["LT",0];
-thx_OrderingImpl.LT.toString = $estr;
-thx_OrderingImpl.LT.__enum__ = thx_OrderingImpl;
-thx_OrderingImpl.GT = ["GT",1];
-thx_OrderingImpl.GT.toString = $estr;
-thx_OrderingImpl.GT.__enum__ = thx_OrderingImpl;
-thx_OrderingImpl.EQ = ["EQ",2];
-thx_OrderingImpl.EQ.toString = $estr;
-thx_OrderingImpl.EQ.__enum__ = thx_OrderingImpl;
-thx_OrderingImpl.__empty_constructs__ = [thx_OrderingImpl.LT,thx_OrderingImpl.GT,thx_OrderingImpl.EQ];
 var thx_Ints = function() { };
 $hxClasses["thx.Ints"] = thx_Ints;
 thx_Ints.__name__ = ["thx","Ints"];
@@ -31890,22 +31379,6 @@ thx_Ints.clampSym = function(v,max) {
 thx_Ints.compare = function(a,b) {
 	return a - b;
 };
-thx_Ints.gcd = function(m,n) {
-	if(m < 0) {
-		m = -m;
-	} else {
-		m = m;
-	}
-	if(n < 0) {
-		n = -n;
-	} else {
-		n = n;
-	}
-	if(n == 0) {
-		return m;
-	}
-	return thx_Ints.gcd(n,m % n);
-};
 thx_Ints.interpolate = function(f,a,b) {
 	return Math.round(a + (b - a) * f);
 };
@@ -31914,39 +31387,6 @@ thx_Ints.isEven = function(v) {
 };
 thx_Ints.isOdd = function(v) {
 	return v % 2 != 0;
-};
-thx_Ints.lpad = function(v,pad,len) {
-	if(pad == null) {
-		pad = "0";
-	}
-	var neg = false;
-	if(v < 0) {
-		neg = true;
-		v = -v;
-	}
-	return (neg?"-":"") + StringTools.lpad("" + v,pad,len);
-};
-thx_Ints.lcm = function(m,n) {
-	if(m < 0) {
-		m = -m;
-	} else {
-		m = m;
-	}
-	if(n < 0) {
-		n = -n;
-	} else {
-		n = n;
-	}
-	if(n == 0) {
-		return m;
-	}
-	return m * (n / thx_Ints.gcd(m,n) | 0);
-};
-thx_Ints.rpad = function(v,pad,len) {
-	if(pad == null) {
-		pad = "0";
-	}
-	return StringTools.rpad("" + v,pad,len);
 };
 thx_Ints.max = function(a,b) {
 	if(a > b) {
@@ -31963,13 +31403,6 @@ thx_Ints.min = function(a,b) {
 	}
 };
 thx_Ints.parse = function(s,base) {
-	if(null == base) {
-		if(s.substring(0,2) == "0x") {
-			base = 16;
-		} else {
-			base = 10;
-		}
-	}
 	var v = parseInt(s,base);
 	if(isNaN(v)) {
 		return null;
@@ -32016,23 +31449,11 @@ thx_Ints.range = function(start,stop,step) {
 	}
 	return range;
 };
-thx_Ints.rangeIter = function(start,stop,step) {
-	if(step == null) {
-		step = 1;
-	}
-	return new thx_RangeIterator(start,stop,step);
-};
 thx_Ints.toString = function(value,base) {
-	return value.toString(base);
-};
-thx_Ints.toBase = function(value,base) {
 	return value.toString(base);
 };
 thx_Ints.toBool = function(v) {
 	return v != 0;
-};
-thx_Ints.toInt = function(s,base) {
-	return thx_Ints.parse(s,base);
 };
 thx_Ints.sign = function(value) {
 	if(value < 0) {
@@ -32048,38 +31469,6 @@ thx_Ints.wrapCircular = function(v,max) {
 	}
 	return v;
 };
-var thx_RangeIterator = function(start,stop,step) {
-	if(step == null) {
-		step = 1;
-	}
-	this.current = start;
-	this.stop = stop;
-	this.step = step;
-};
-$hxClasses["thx.RangeIterator"] = thx_RangeIterator;
-thx_RangeIterator.__name__ = ["thx","RangeIterator"];
-thx_RangeIterator.prototype = {
-	current: null
-	,stop: null
-	,step: null
-	,hasNext: function() {
-		if(!(this.stop == null || this.step >= 0 && this.current < this.stop)) {
-			if(this.step < 0) {
-				return this.current > this.stop;
-			} else {
-				return false;
-			}
-		} else {
-			return true;
-		}
-	}
-	,next: function() {
-		var result = this.current;
-		this.current += this.step;
-		return result;
-	}
-	,__class__: thx_RangeIterator
-};
 var thx_Iterables = function() { };
 $hxClasses["thx.Iterables"] = thx_Iterables;
 thx_Iterables.__name__ = ["thx","Iterables"];
@@ -32093,9 +31482,6 @@ thx_Iterables.eachPair = function(it,handler) {
 	thx_Iterators.eachPair($iterator(it)(),handler);
 	return;
 };
-thx_Iterables.equals = function(a,b,equality) {
-	return thx_Iterators.equals($iterator(a)(),$iterator(b)(),equality);
-};
 thx_Iterables.filter = function(it,predicate) {
 	return thx_Iterators.filter($iterator(it)(),predicate);
 };
@@ -32105,17 +31491,11 @@ thx_Iterables.find = function(it,predicate) {
 thx_Iterables.first = function(it) {
 	return thx_Iterators.first($iterator(it)());
 };
-thx_Iterables.get = function(it,index) {
-	return thx_Iterators.get($iterator(it)(),index);
-};
 thx_Iterables.last = function(it) {
 	return thx_Iterators.last($iterator(it)());
 };
 thx_Iterables.hasElements = function(it) {
 	return $iterator(it)().hasNext();
-};
-thx_Iterables.indexOf = function(it,element) {
-	return thx_Iterators.indexOf($iterator(it)(),element);
 };
 thx_Iterables.isEmpty = function(it) {
 	return !$iterator(it)().hasNext();
@@ -32143,63 +31523,6 @@ thx_Iterables.reducei = function(it,callback,initial) {
 };
 thx_Iterables.toArray = function(it) {
 	return thx_Iterators.toArray($iterator(it)());
-};
-thx_Iterables.minBy = function(it,f,ord) {
-	var found = haxe_ds_Option.None;
-	var tmp = $iterator(it)();
-	while(tmp.hasNext()) {
-		var a = [tmp.next()];
-		if(thx_Options.any(found,(function(a1) {
-			return function(a0) {
-				return ord(f(a0),f(a1[0])) == thx_OrderingImpl.LT;
-			};
-		})(a))) {
-			found = found;
-		} else {
-			found = haxe_ds_Option.Some(a[0]);
-		}
-	}
-	return found;
-};
-thx_Iterables.maxBy = function(it,f,ord) {
-	return thx_Iterables.minBy(it,f,thx__$Ord_Ord_$Impl_$.inverse(ord));
-};
-thx_Iterables.min = function(it,ord) {
-	return thx_Iterables.minBy(it,thx_Functions.identity,ord);
-};
-thx_Iterables.max = function(it,ord) {
-	return thx_Iterables.minBy(it,thx_Functions.identity,thx__$Ord_Ord_$Impl_$.inverse(ord));
-};
-thx_Iterables.extremaBy = function(it,f,ord) {
-	var found = haxe_ds_Option.None;
-	var tmp = $iterator(it)();
-	while(tmp.hasNext()) {
-		var a = tmp.next();
-		switch(found[1]) {
-		case 0:
-			var t = found[2];
-			if(ord(f(a),f(t._0)) == thx_OrderingImpl.LT) {
-				found = haxe_ds_Option.Some({ _0 : a, _1 : t._1});
-			} else {
-				var t1 = found[2];
-				if(ord(f(a),f(t1._1)) == thx_OrderingImpl.GT) {
-					found = haxe_ds_Option.Some({ _0 : t1._0, _1 : a});
-				} else {
-					found = found;
-				}
-			}
-			break;
-		case 1:
-			found = haxe_ds_Option.Some({ _0 : a, _1 : a});
-			break;
-		default:
-			found = found;
-		}
-	}
-	return found;
-};
-thx_Iterables.extrema = function(it,ord) {
-	return thx_Iterables.extremaBy(it,thx_Functions.identity,ord);
 };
 thx_Iterables.unzip = function(it) {
 	return thx_Iterators.unzip($iterator(it)());
@@ -32240,36 +31563,6 @@ thx_Iterators.any = function(it,predicate) {
 	}
 	return false;
 };
-thx_Iterators.equals = function(a,b,equality) {
-	if(null == equality) {
-		equality = thx_Functions.equality;
-	}
-	var an;
-	var bn;
-	while(true) {
-		an = a.hasNext();
-		bn = b.hasNext();
-		if(!an && !bn) {
-			return true;
-		}
-		if(!an || !bn) {
-			return false;
-		}
-		if(!equality(a.next(),b.next())) {
-			return false;
-		}
-	}
-};
-thx_Iterators.get = function(it,index) {
-	var pos = 0;
-	while(it.hasNext()) {
-		var i = it.next();
-		if(pos++ == index) {
-			return i;
-		}
-	}
-	return null;
-};
 thx_Iterators.eachPair = function(it,handler) {
 	thx_Arrays.eachPair(thx_Iterators.toArray(it),handler);
 };
@@ -32299,16 +31592,6 @@ thx_Iterators.first = function(it) {
 };
 thx_Iterators.hasElements = function(it) {
 	return it.hasNext();
-};
-thx_Iterators.indexOf = function(it,element) {
-	var pos = 0;
-	while(it.hasNext()) {
-		if(element == it.next()) {
-			return pos;
-		}
-		++pos;
-	}
-	return -1;
 };
 thx_Iterators.isEmpty = function(it) {
 	return !it.hasNext();
@@ -32433,40 +31716,10 @@ thx_Iterators.zip5 = function(it1,it2,it3,it4,it5) {
 var thx_Maps = function() { };
 $hxClasses["thx.Maps"] = thx_Maps;
 thx_Maps.__name__ = ["thx","Maps"];
-thx_Maps.copyTo = function(src,dst) {
-	var tmp = src.keys();
-	while(tmp.hasNext()) {
-		var key = tmp.next();
-		dst.set(key,src.get(key));
-	}
-	return dst;
-};
 thx_Maps.tuples = function(map) {
 	return thx_Iterators.map(map.keys(),function(key) {
 		return { _0 : key, _1 : map.get(key)};
 	});
-};
-thx_Maps.mapValues = function(map,f,acc) {
-	return thx_Maps.reduce(map,function(m,t) {
-		m.set(t._0,f(t._1));
-		return m;
-	},acc);
-};
-thx_Maps.reduce = function(map,f,acc) {
-	return thx_Maps.tuples(map).reduce(f,acc);
-};
-thx_Maps.values = function(map) {
-	return thx_Iterators.map(map.keys(),function(key) {
-		return map.get(key);
-	});
-};
-thx_Maps.getOption = function(map,key) {
-	var value = map.get(key);
-	if(null == value) {
-		return haxe_ds_Option.None;
-	} else {
-		return haxe_ds_Option.Some(value);
-	}
 };
 thx_Maps.toObject = function(map) {
 	return thx_Maps.tuples(map).reduce(function(o,t) {
@@ -32485,105 +31738,6 @@ thx_Maps.getAlt = function(map,key,alt) {
 thx_Maps.isMap = function(v) {
 	return js_Boot.__instanceof(v,haxe_IMap);
 };
-thx_Maps.string = function(m) {
-	return "[" + thx_Maps.tuples(m).map(function(t) {
-		return thx_Dynamics.string(t._0) + " => " + thx_Dynamics.string(t._1);
-	}).join(", ") + "]";
-};
-thx_Maps.merge = function(dest,sources) {
-	return sources.reduce(function(result,source) {
-		return thx_Iterators.reduce(source.keys(),function(result1,key) {
-			result1.set(key,source.get(key));
-			return result1;
-		},result);
-	},dest);
-};
-var thx__$Monoid_Monoid_$Impl_$ = {};
-$hxClasses["thx._Monoid.Monoid_Impl_"] = thx__$Monoid_Monoid_$Impl_$;
-thx__$Monoid_Monoid_$Impl_$.__name__ = ["thx","_Monoid","Monoid_Impl_"];
-thx__$Monoid_Monoid_$Impl_$.__properties__ = {get_zero:"get_zero",get_semigroup:"get_semigroup"}
-thx__$Monoid_Monoid_$Impl_$.get_semigroup = function(this1) {
-	return this1.append;
-};
-thx__$Monoid_Monoid_$Impl_$.get_zero = function(this1) {
-	return this1.zero;
-};
-thx__$Monoid_Monoid_$Impl_$.append = function(this1,a0,a1) {
-	return this1.append(a0,a1);
-};
-var thx__$Nel_Nel_$Impl_$ = {};
-$hxClasses["thx._Nel.Nel_Impl_"] = thx__$Nel_Nel_$Impl_$;
-thx__$Nel_Nel_$Impl_$.__name__ = ["thx","_Nel","Nel_Impl_"];
-thx__$Nel_Nel_$Impl_$.nel = function(hd,tl) {
-	var _g = thx__$Nel_Nel_$Impl_$.fromArray(tl);
-	switch(_g[1]) {
-	case 0:
-		return thx__$Nel_Nel_$Impl_$.cons(hd,_g[2]);
-	case 1:
-		return thx__$Nel_Nel_$Impl_$.pure(hd);
-	}
-};
-thx__$Nel_Nel_$Impl_$.pure = function(a) {
-	return thx_NonEmptyList.Single(a);
-};
-thx__$Nel_Nel_$Impl_$.cons = function(a,nl) {
-	return thx_NonEmptyList.ConsNel(a,nl);
-};
-thx__$Nel_Nel_$Impl_$.fromArray = function(arr) {
-	if(arr.length == 0) {
-		return haxe_ds_Option.None;
-	} else {
-		var res = thx_NonEmptyList.Single(arr[arr.length - 1]);
-		var tmp = thx_Ints.rangeIter(arr.length - 2,-1,-1);
-		while(tmp.hasNext()) res = thx_NonEmptyList.ConsNel(arr[tmp.next()],res);
-		return haxe_ds_Option.Some(res);
-	}
-};
-thx__$Nel_Nel_$Impl_$.map = function(this1,f) {
-	var fb = f;
-	return thx__$Nel_Nel_$Impl_$.flatMap(this1,function(v) {
-		return thx__$Nel_Nel_$Impl_$.pure(fb(v));
-	});
-};
-thx__$Nel_Nel_$Impl_$.flatMap = function(this1,f) {
-	switch(this1[1]) {
-	case 0:
-		return f(this1[2]);
-	case 1:
-		return thx__$Nel_Nel_$Impl_$.append(f(this1[2]),thx__$Nel_Nel_$Impl_$.flatMap(this1[3],f));
-	}
-};
-thx__$Nel_Nel_$Impl_$.append = function(this1,nel) {
-	switch(this1[1]) {
-	case 0:
-		return thx_NonEmptyList.ConsNel(this1[2],nel);
-	case 1:
-		return thx_NonEmptyList.ConsNel(this1[2],thx__$Nel_Nel_$Impl_$.append(this1[3],nel));
-	}
-};
-thx__$Nel_Nel_$Impl_$.toArray = function(this1) {
-	var go = null;
-	go = function(acc,xs) {
-		switch(xs[1]) {
-		case 0:
-			return thx_Arrays.append(acc,xs[2]);
-		case 1:
-			return go(thx_Arrays.append(acc,xs[2]),xs[3]);
-		}
-	};
-	var result = go([],this1).slice();
-	result.reverse();
-	return result;
-};
-thx__$Nel_Nel_$Impl_$.semigroup = function() {
-	return function(nl,nr) {
-		return thx__$Nel_Nel_$Impl_$.append(nl,nr);
-	};
-};
-var thx_NonEmptyList = $hxClasses["thx.NonEmptyList"] = { __ename__ : ["thx","NonEmptyList"], __constructs__ : ["Single","ConsNel"] };
-thx_NonEmptyList.Single = function(x) { var $x = ["Single",0,x]; $x.__enum__ = thx_NonEmptyList; $x.toString = $estr; return $x; };
-thx_NonEmptyList.ConsNel = function(x,xs) { var $x = ["ConsNel",1,x,xs]; $x.__enum__ = thx_NonEmptyList; $x.toString = $estr; return $x; };
-thx_NonEmptyList.__empty_constructs__ = [];
 var thx_Nil = $hxClasses["thx.Nil"] = { __ename__ : ["thx","Nil"], __constructs__ : ["nil"] };
 thx_Nil.nil = ["nil",0];
 thx_Nil.nil.toString = $estr;
@@ -32619,25 +31773,7 @@ thx_Objects.exists = function(o,name) {
 thx_Objects.fields = function(o) {
 	return Reflect.fields(o);
 };
-thx_Objects.combine = function(first,second) {
-	var to = { };
-	var _g = 0;
-	var _g1 = Reflect.fields(first);
-	while(_g < _g1.length) {
-		var field = _g1[_g];
-		++_g;
-		to[field] = Reflect.field(first,field);
-	}
-	var _g2 = 0;
-	var _g11 = Reflect.fields(second);
-	while(_g2 < _g11.length) {
-		var field1 = _g11[_g2];
-		++_g2;
-		to[field1] = Reflect.field(second,field1);
-	}
-	return to;
-};
-thx_Objects.assign = function(to,from,replacef) {
+thx_Objects.merge = function(to,from,replacef) {
 	if(null == replacef) {
 		replacef = function(field,oldv,newv) {
 			return newv;
@@ -32717,11 +31853,8 @@ thx_Objects.size = function(o) {
 };
 thx_Objects.string = function(o) {
 	return "{" + Reflect.fields(o).map(function(key) {
-		var v = Reflect.field(o,key);
-		return "" + key + " : " + (typeof(v) == "string"?thx_Strings.quote(v):thx_Dynamics.string(v));
+		return "" + key + " : " + thx_Objects.string(Reflect.field(o,key));
 	}).join(", ") + "}";
-};
-thx_Objects.stringImpl = function(o,cache) {
 };
 thx_Objects.values = function(o) {
 	return Reflect.fields(o).map(function(key) {
@@ -32782,29 +31915,6 @@ thx_Objects.getPath = function(o,path) {
 	}
 	return current;
 };
-thx_Objects.getPathOr = function(o,path,alt) {
-	var paths = path.split(".");
-	var current = o;
-	var _g = 0;
-	while(_g < paths.length) {
-		var currentPath = paths[_g];
-		++_g;
-		if(thx_Strings.DIGITS.match(currentPath)) {
-			var index = Std.parseInt(currentPath);
-			var value = current;
-			var arr = (value instanceof Array)?value:null;
-			if(null == arr) {
-				return null;
-			}
-			current = arr[index];
-		} else if(Object.prototype.hasOwnProperty.call(current,currentPath)) {
-			current = Reflect.field(current,currentPath);
-		} else {
-			return alt;
-		}
-	}
-	return current;
-};
 thx_Objects.setPath = function(o,path,val) {
 	var paths = path.split(".");
 	var current = o;
@@ -32814,10 +31924,10 @@ thx_Objects.setPath = function(o,path,val) {
 		var i = _g1++;
 		var currentPath = paths[i];
 		var nextPath = paths[i + 1];
-		if(thx_Strings.DIGITS.match(currentPath) || currentPath == "*") {
-			var index = currentPath == "*"?current.length:Std.parseInt(currentPath);
+		if(thx_Strings.DIGITS.match(currentPath)) {
+			var index = Std.parseInt(currentPath);
 			if(current[index] == null) {
-				if(thx_Strings.DIGITS.match(nextPath) || nextPath == "*") {
+				if(thx_Strings.DIGITS.match(nextPath)) {
 					current[index] = [];
 				} else {
 					current[index] = { };
@@ -32826,7 +31936,7 @@ thx_Objects.setPath = function(o,path,val) {
 			current = current[index];
 		} else {
 			if(!Object.prototype.hasOwnProperty.call(current,currentPath)) {
-				if(thx_Strings.DIGITS.match(nextPath) || nextPath == "*") {
+				if(thx_Strings.DIGITS.match(nextPath)) {
 					current[currentPath] = [];
 				} else {
 					current[currentPath] = { };
@@ -32835,13 +31945,11 @@ thx_Objects.setPath = function(o,path,val) {
 			current = Reflect.field(current,currentPath);
 		}
 	}
-	var tmp = paths[paths.length - 1];
-	if(thx_Strings.DIGITS.match(tmp)) {
-		current[Std.parseInt(tmp)] = val;
-	} else if(tmp == "*") {
-		current.push(val);
+	var p = paths[paths.length - 1];
+	if(thx_Strings.DIGITS.match(p)) {
+		current[Std.parseInt(p)] = val;
 	} else {
-		current[tmp] = val;
+		current[p] = val;
 	}
 	return o;
 };
@@ -32850,10 +31958,9 @@ thx_Objects.removePath = function(o,path) {
 	var target = paths.pop();
 	try {
 		var sub = paths.reduce(function(existing,nextPath) {
-			if(nextPath == "*") {
-				return existing.pop();
-			} else if(thx_Strings.DIGITS.match(nextPath)) {
-				return existing[Std.parseInt(nextPath)];
+			if(thx_Strings.DIGITS.match(nextPath)) {
+				var current = existing;
+				return current[Std.parseInt(nextPath)];
 			} else {
 				return Reflect.field(existing,nextPath);
 			}
@@ -32866,386 +31973,11 @@ thx_Objects.removePath = function(o,path) {
 	}
 	return o;
 };
-var thx_Options = function() { };
-$hxClasses["thx.Options"] = thx_Options;
-thx_Options.__name__ = ["thx","Options"];
-thx_Options.ofValue = function(value) {
-	if(null == value) {
-		return haxe_ds_Option.None;
-	} else {
-		return haxe_ds_Option.Some(value);
-	}
-};
-thx_Options.equals = function(a,b,eq) {
-	switch(a[1]) {
-	case 0:
-		if(b[1] == 0) {
-			var a1 = a[2];
-			var b1 = b[2];
-			if(null == eq) {
-				eq = function(a2,b2) {
-					return a2 == b2;
-				};
-			}
-			return eq(a1,b1);
-		} else {
-			return false;
-		}
-		break;
-	case 1:
-		if(b[1] == 1) {
-			return true;
-		} else {
-			return false;
-		}
-		break;
-	}
-};
-thx_Options.equalsValue = function(a,b,eq) {
-	return thx_Options.equals(a,null == b?haxe_ds_Option.None:haxe_ds_Option.Some(b),eq);
-};
-thx_Options.map = function(option,callback) {
-	switch(option[1]) {
-	case 0:
-		return haxe_ds_Option.Some(callback(option[2]));
-	case 1:
-		return haxe_ds_Option.None;
-	}
-};
-thx_Options.ap = function(option,fopt) {
-	switch(option[1]) {
-	case 0:
-		var v = option[2];
-		return thx_Options.map(fopt,function(f) {
-			return f(v);
-		});
-	case 1:
-		return haxe_ds_Option.None;
-	}
-};
-thx_Options.flatMap = function(option,callback) {
-	switch(option[1]) {
-	case 0:
-		return callback(option[2]);
-	case 1:
-		return haxe_ds_Option.None;
-	}
-};
-thx_Options.join = function(option) {
-	return thx_Options.flatMap(option,thx_Functions.identity);
-};
-thx_Options.foldLeft = function(option,b,f) {
-	switch(option[1]) {
-	case 0:
-		return f(b,option[2]);
-	case 1:
-		return b;
-	}
-};
-thx_Options.toArray = function(option) {
-	switch(option[1]) {
-	case 0:
-		return [option[2]];
-	case 1:
-		return [];
-	}
-};
-thx_Options.toBool = function(option) {
-	switch(option[1]) {
-	case 0:
-		return true;
-	case 1:
-		return false;
-	}
-};
-thx_Options.toOption = function(value) {
-	if(null == value) {
-		return haxe_ds_Option.None;
-	} else {
-		return haxe_ds_Option.Some(value);
-	}
-};
-thx_Options.get = function(option) {
-	switch(option[1]) {
-	case 0:
-		return option[2];
-	case 1:
-		return null;
-	}
-};
-thx_Options.getOrElse = function(option,alt) {
-	switch(option[1]) {
-	case 0:
-		return option[2];
-	case 1:
-		return alt;
-	}
-};
-thx_Options.orElse = function(option,alt) {
-	switch(option[1]) {
-	case 0:
-		return option;
-	case 1:
-		return alt;
-	}
-};
-thx_Options.all = function(option,f) {
-	switch(option[1]) {
-	case 0:
-		return f(option[2]);
-	case 1:
-		return true;
-	}
-};
-thx_Options.any = function(option,f) {
-	switch(option[1]) {
-	case 0:
-		return f(option[2]);
-	case 1:
-		return false;
-	}
-};
-thx_Options.toSuccess = function(option,error) {
-	switch(option[1]) {
-	case 0:
-		return thx_Either.Right(option[2]);
-	case 1:
-		return thx_Either.Left(error);
-	}
-};
-thx_Options.toSuccessNel = function(option,error) {
-	switch(option[1]) {
-	case 0:
-		return thx_Either.Right(option[2]);
-	case 1:
-		return thx_Either.Left(thx__$Nel_Nel_$Impl_$.pure(error));
-	}
-};
-thx_Options.ap2 = function(f,v1,v2) {
-	return thx_Options.ap(v2,thx_Options.map(v1,thx_Functions2.curry(f)));
-};
-thx_Options.ap3 = function(f,v1,v2,v3) {
-	var f1 = f;
-	return thx_Options.ap(v3,thx_Options.ap(v2,thx_Options.map(v1,thx_Functions2.curry(function(a,b) {
-		return function(c) {
-			return f1(a,b,c);
-		};
-	}))));
-};
-thx_Options.ap4 = function(f,v1,v2,v3,v4) {
-	var f1 = f;
-	var f2 = function(a,b,c) {
-		return function(d) {
-			return f1(a,b,c,d);
-		};
-	};
-	return thx_Options.ap(v4,thx_Options.ap(v3,thx_Options.ap(v2,thx_Options.map(v1,thx_Functions2.curry(function(a1,b1) {
-		return function(c1) {
-			return f2(a1,b1,c1);
-		};
-	})))));
-};
-thx_Options.ap5 = function(f,v1,v2,v3,v4,v5) {
-	var f1 = f;
-	var f2 = function(a,b,c,d) {
-		return function(e) {
-			return f1(a,b,c,d,e);
-		};
-	};
-	var f3 = function(a1,b1,c1) {
-		return function(d1) {
-			return f2(a1,b1,c1,d1);
-		};
-	};
-	return thx_Options.ap(v5,thx_Options.ap(v4,thx_Options.ap(v3,thx_Options.ap(v2,thx_Options.map(v1,thx_Functions2.curry(function(a2,b2) {
-		return function(c2) {
-			return f3(a2,b2,c2);
-		};
-	}))))));
-};
-thx_Options.ap6 = function(f,v1,v2,v3,v4,v5,v6) {
-	var f1 = f;
-	var f2 = function(a,b,c,d,e) {
-		return function(f0) {
-			return f1(a,b,c,d,e,f0);
-		};
-	};
-	var f3 = function(a1,b1,c1,d1) {
-		return function(e1) {
-			return f2(a1,b1,c1,d1,e1);
-		};
-	};
-	var f4 = function(a2,b2,c2) {
-		return function(d2) {
-			return f3(a2,b2,c2,d2);
-		};
-	};
-	return thx_Options.ap(v6,thx_Options.ap(v5,thx_Options.ap(v4,thx_Options.ap(v3,thx_Options.ap(v2,thx_Options.map(v1,thx_Functions2.curry(function(a3,b3) {
-		return function(c3) {
-			return f4(a3,b3,c3);
-		};
-	})))))));
-};
-thx_Options.ap7 = function(f,v1,v2,v3,v4,v5,v6,v7) {
-	var f1 = f;
-	var f2 = function(a,b,c,d,e,f0) {
-		return function(g) {
-			return f1(a,b,c,d,e,f0,g);
-		};
-	};
-	var f3 = function(a1,b1,c1,d1,e1) {
-		return function(f01) {
-			return f2(a1,b1,c1,d1,e1,f01);
-		};
-	};
-	var f4 = function(a2,b2,c2,d2) {
-		return function(e2) {
-			return f3(a2,b2,c2,d2,e2);
-		};
-	};
-	var f5 = function(a3,b3,c3) {
-		return function(d3) {
-			return f4(a3,b3,c3,d3);
-		};
-	};
-	return thx_Options.ap(v7,thx_Options.ap(v6,thx_Options.ap(v5,thx_Options.ap(v4,thx_Options.ap(v3,thx_Options.ap(v2,thx_Options.map(v1,thx_Functions2.curry(function(a4,b4) {
-		return function(c4) {
-			return f5(a4,b4,c4);
-		};
-	}))))))));
-};
-thx_Options.ap8 = function(f,v1,v2,v3,v4,v5,v6,v7,v8) {
-	var f1 = f;
-	var f2 = function(a,b,c,d,e,f0,g) {
-		return function(h) {
-			return f1(a,b,c,d,e,f0,g,h);
-		};
-	};
-	var f3 = function(a1,b1,c1,d1,e1,f01) {
-		return function(g1) {
-			return f2(a1,b1,c1,d1,e1,f01,g1);
-		};
-	};
-	var f4 = function(a2,b2,c2,d2,e2) {
-		return function(f02) {
-			return f3(a2,b2,c2,d2,e2,f02);
-		};
-	};
-	var f5 = function(a3,b3,c3,d3) {
-		return function(e3) {
-			return f4(a3,b3,c3,d3,e3);
-		};
-	};
-	var f6 = function(a4,b4,c4) {
-		return function(d4) {
-			return f5(a4,b4,c4,d4);
-		};
-	};
-	return thx_Options.ap(v8,thx_Options.ap(v7,thx_Options.ap(v6,thx_Options.ap(v5,thx_Options.ap(v4,thx_Options.ap(v3,thx_Options.ap(v2,thx_Options.map(v1,thx_Functions2.curry(function(a5,b5) {
-		return function(c5) {
-			return f6(a5,b5,c5);
-		};
-	})))))))));
-};
-var thx__$Ord_Ordering_$Impl_$ = {};
-$hxClasses["thx._Ord.Ordering_Impl_"] = thx__$Ord_Ordering_$Impl_$;
-thx__$Ord_Ordering_$Impl_$.__name__ = ["thx","_Ord","Ordering_Impl_"];
-thx__$Ord_Ordering_$Impl_$.fromInt = function(value) {
-	if(value < 0) {
-		return thx_OrderingImpl.LT;
-	} else if(value > 0) {
-		return thx_OrderingImpl.GT;
-	} else {
-		return thx_OrderingImpl.EQ;
-	}
-};
-thx__$Ord_Ordering_$Impl_$.fromFloat = function(value) {
-	if(value < 0) {
-		return thx_OrderingImpl.LT;
-	} else if(value > 0) {
-		return thx_OrderingImpl.GT;
-	} else {
-		return thx_OrderingImpl.EQ;
-	}
-};
-thx__$Ord_Ordering_$Impl_$.toInt = function(this1) {
-	switch(this1[1]) {
-	case 0:
-		return -1;
-	case 1:
-		return 1;
-	case 2:
-		return 0;
-	}
-};
-var thx__$Ord_Ord_$Impl_$ = {};
-$hxClasses["thx._Ord.Ord_Impl_"] = thx__$Ord_Ord_$Impl_$;
-thx__$Ord_Ord_$Impl_$.__name__ = ["thx","_Ord","Ord_Impl_"];
-thx__$Ord_Ord_$Impl_$.fromIntComparison = function(f) {
-	return function(a,b) {
-		return thx__$Ord_Ordering_$Impl_$.fromInt(f(a,b));
-	};
-};
-thx__$Ord_Ord_$Impl_$.order = function(this1,a0,a1) {
-	return this1(a0,a1);
-};
-thx__$Ord_Ord_$Impl_$.contramap = function(this1,f) {
-	return function(b0,b1) {
-		return this1(f(b0),f(b1));
-	};
-};
-thx__$Ord_Ord_$Impl_$.inverse = function(this1) {
-	return function(a0,a1) {
-		return this1(a1,a0);
-	};
-};
-thx__$Ord_Ord_$Impl_$.fromCompare = function(f) {
-	return function(a0,a1) {
-		var i = f(a0,a1);
-		if(i < 0) {
-			return thx_OrderingImpl.LT;
-		} else if(i == 0) {
-			return thx_OrderingImpl.EQ;
-		} else {
-			return thx_OrderingImpl.GT;
-		}
-	};
-};
-var thx__$ReadonlyArray_ReadonlyArray_$Impl_$ = {};
-$hxClasses["thx._ReadonlyArray.ReadonlyArray_Impl_"] = thx__$ReadonlyArray_ReadonlyArray_$Impl_$;
-thx__$ReadonlyArray_ReadonlyArray_$Impl_$.__name__ = ["thx","_ReadonlyArray","ReadonlyArray_Impl_"];
-thx__$ReadonlyArray_ReadonlyArray_$Impl_$.empty = function() {
-	return [];
-};
-thx__$ReadonlyArray_ReadonlyArray_$Impl_$.get = function(this1,index) {
-	return this1[index];
-};
-thx__$ReadonlyArray_ReadonlyArray_$Impl_$.toArray = function(this1) {
-	return this1.slice();
-};
-thx__$ReadonlyArray_ReadonlyArray_$Impl_$.unsafe = function(this1) {
-	return this1;
-};
-var thx__$Semigroup_Semigroup_$Impl_$ = {};
-$hxClasses["thx._Semigroup.Semigroup_Impl_"] = thx__$Semigroup_Semigroup_$Impl_$;
-thx__$Semigroup_Semigroup_$Impl_$.__name__ = ["thx","_Semigroup","Semigroup_Impl_"];
-thx__$Semigroup_Semigroup_$Impl_$.__properties__ = {get_append:"get_append"}
-thx__$Semigroup_Semigroup_$Impl_$.get_append = function(this1) {
-	return this1;
-};
 var thx_Strings = function() { };
 $hxClasses["thx.Strings"] = thx_Strings;
 thx_Strings.__name__ = ["thx","Strings"];
 thx_Strings.after = function(value,searchFor) {
 	var pos = value.indexOf(searchFor);
-	if(pos < 0) {
-		return "";
-	} else {
-		return value.substring(pos + searchFor.length);
-	}
-};
-thx_Strings.afterLast = function(value,searchFor) {
-	var pos = value.lastIndexOf(searchFor);
 	if(pos < 0) {
 		return "";
 	} else {
@@ -33264,28 +31996,6 @@ thx_Strings.capitalizeWords = function(value,whiteSpaceOnly) {
 	} else {
 		return thx_Strings.UCWORDS.map(HxOverrides.substr(value,0,1).toUpperCase() + HxOverrides.substr(value,1,value.length - 1),thx_Strings.upperMatch);
 	}
-};
-thx_Strings.canonicalizeNewlines = function(value) {
-	return value.replace(thx_Strings.CANONICALIZE_LINES.r,"\n");
-};
-thx_Strings.caseInsensitiveCompare = function(a,b) {
-	return haxe_Utf8.compare(a.toLowerCase(),b.toLowerCase());
-};
-thx_Strings.caseInsensitiveEndsWith = function(s,end) {
-	return StringTools.endsWith(s.toLowerCase(),end.toLowerCase());
-};
-thx_Strings.caseInsensitiveEndsWithAny = function(s,values) {
-	return thx_Strings.endsWithAny(s.toLowerCase(),values.map(function(v) {
-		return v.toLowerCase();
-	}));
-};
-thx_Strings.caseInsensitiveStartsWith = function(s,start) {
-	return StringTools.startsWith(s.toLowerCase(),start.toLowerCase());
-};
-thx_Strings.caseInsensitiveStartsWithAny = function(s,values) {
-	return thx_Strings.startsWithAny(s.toLowerCase(),values.map(function(v) {
-		return v.toLowerCase();
-	}));
 };
 thx_Strings.collapse = function(value) {
 	return StringTools.trim(value).replace(thx_Strings.WSG.r," ");
@@ -33308,20 +32018,6 @@ thx_Strings.containsAny = function(s,tests) {
 thx_Strings.dasherize = function(s) {
 	return StringTools.replace(s,"_","-");
 };
-thx_Strings.diffAt = function(a,b) {
-	var a1 = a.length;
-	var b1 = b.length;
-	var min = a1 < b1?a1:b1;
-	var _g1 = 0;
-	var _g = min;
-	while(_g1 < _g) {
-		var i = _g1++;
-		if(a.substring(i,i + 1) != b.substring(i,i + 1)) {
-			return i;
-		}
-	}
-	return min;
-};
 thx_Strings.ellipsis = function(s,maxlen,symbol) {
 	if(symbol == null) {
 		symbol = "…";
@@ -33341,31 +32037,6 @@ thx_Strings.ellipsis = function(s,maxlen,symbol) {
 		return s;
 	}
 };
-thx_Strings.ellipsisMiddle = function(s,maxlen,symbol) {
-	if(symbol == null) {
-		symbol = "…";
-	}
-	if(maxlen == null) {
-		maxlen = 20;
-	}
-	var sl = s.length;
-	var symboll = symbol.length;
-	if(sl > maxlen) {
-		if(maxlen <= symboll) {
-			return thx_Strings.ellipsis(s,maxlen,symbol);
-		}
-		var hll = Math.ceil((maxlen - symboll) / 2);
-		var hlr = Math.floor((maxlen - symboll) / 2);
-		return HxOverrides.substr(s,0,hll) + symbol + HxOverrides.substr(s,sl - hlr,hlr);
-	} else {
-		return s;
-	}
-};
-thx_Strings.endsWithAny = function(s,values) {
-	return thx_Iterables.any(values,function(end) {
-		return StringTools.endsWith(s,end);
-	});
-};
 thx_Strings.filter = function(s,predicate) {
 	return s.split("").filter(predicate).join("");
 };
@@ -33384,16 +32055,6 @@ thx_Strings.from = function(value,searchFor) {
 		return value.substring(pos);
 	}
 };
-thx_Strings.hashCode = function(value) {
-	var code = 0;
-	var _g1 = 0;
-	var _g = value.length;
-	while(_g1 < _g) {
-		var c = HxOverrides.cca(value,_g1++);
-		code = (haxe__$Int32_Int32_$Impl_$.mul(thx_Strings.HASCODE_MUL,code) + c | 0) % thx_Strings.HASCODE_MAX;
-	}
-	return code;
-};
 thx_Strings.hasContent = function(value) {
 	if(value != null) {
 		return value.length > 0;
@@ -33404,18 +32065,8 @@ thx_Strings.hasContent = function(value) {
 thx_Strings.humanize = function(s) {
 	return StringTools.replace(thx_Strings.underscore(s),"_"," ");
 };
-thx_Strings.isAlpha = function(s) {
-	if(s.length > 0) {
-		return !thx_Strings.IS_ALPHA.match(s);
-	} else {
-		return false;
-	}
-};
 thx_Strings.isAlphaNum = function(value) {
 	return thx_Strings.ALPHANUM.match(value);
-};
-thx_Strings.isBreakingWhitespace = function(value) {
-	return !thx_Strings.IS_BREAKINGWHITESPACE.match(value);
 };
 thx_Strings.isLowerCase = function(value) {
 	return value.toLowerCase() == value;
@@ -33440,22 +32091,11 @@ thx_Strings.isEmpty = function(value) {
 		return true;
 	}
 };
-thx_Strings.lowerCaseFirst = function(value) {
-	return value.substring(0,1).toLowerCase() + value.substring(1);
-};
 thx_Strings.random = function(value,length) {
 	if(length == null) {
 		length = 1;
 	}
 	return HxOverrides.substr(value,Math.floor((value.length - length + 1) * Math.random()),length);
-};
-thx_Strings.randomSequence = function(seed,length) {
-	return thx_Ints.range(0,length).map(function(_) {
-		return thx_Strings.random(seed);
-	}).join("");
-};
-thx_Strings.randomSequence64 = function(length) {
-	return thx_Strings.randomSequence(haxe_crypto_Base64.CHARS,length);
 };
 thx_Strings.iterator = function(s) {
 	return HxOverrides.iter(s.split(""));
@@ -33473,22 +32113,12 @@ thx_Strings.removeAfter = function(value,toremove) {
 		return value;
 	}
 };
-thx_Strings.removeAt = function(value,index,length) {
-	return value.substring(0,index) + value.substring(index + length);
-};
 thx_Strings.removeBefore = function(value,toremove) {
 	if(StringTools.startsWith(value,toremove)) {
 		return value.substring(toremove.length);
 	} else {
 		return value;
 	}
-};
-thx_Strings.removeOne = function(value,toremove) {
-	var pos = value.indexOf(toremove);
-	if(pos < 0) {
-		return value;
-	}
-	return value.substring(0,pos) + value.substring(pos + toremove.length);
 };
 thx_Strings.repeat = function(s,times) {
 	var _g = [];
@@ -33513,18 +32143,6 @@ thx_Strings.quote = function(s) {
 		return "\"" + StringTools.replace(s,"\"","\\\"") + "\"";
 	}
 };
-thx_Strings.splitOnce = function(s,separator) {
-	var pos = s.indexOf(separator);
-	if(pos < 0) {
-		return [s];
-	}
-	return [s.substring(0,pos),s.substring(pos + separator.length)];
-};
-thx_Strings.startsWithAny = function(s,values) {
-	return thx_Iterables.any(values,function(start) {
-		return StringTools.startsWith(s,start);
-	});
-};
 thx_Strings.stripTags = function(s) {
 	return s.replace(thx_Strings.STRIPTAGS.r,"");
 };
@@ -33534,7 +32152,7 @@ thx_Strings.surround = function(s,left,right) {
 thx_Strings.toArray = function(s) {
 	return s.split("");
 };
-thx_Strings.toCharcodes = function(s) {
+thx_Strings.toCharcodeArray = function(s) {
 	return thx_Strings.map(s,function(s1) {
 		return HxOverrides.cca(s1,0);
 	});
@@ -33546,9 +32164,6 @@ thx_Strings.toChunks = function(s,len) {
 		s = HxOverrides.substr(s,len,s.length - len);
 	}
 	return chunks;
-};
-thx_Strings.toLines = function(s) {
-	return thx_Strings.SPLIT_LINES.split(s);
 };
 thx_Strings.trimChars = function(value,charlist) {
 	return thx_Strings.trimCharsRight(thx_Strings.trimCharsLeft(value,charlist),charlist);
@@ -33585,9 +32200,6 @@ thx_Strings.underscore = function(s) {
 	s = s.replace(new RegExp("([a-z\\d])([A-Z])","g".split("u").join("")),"$1_$2");
 	s = s.replace(new RegExp("-","g".split("u").join("")),"_");
 	return s.toLowerCase();
-};
-thx_Strings.upperCaseFirst = function(value) {
-	return value.substring(0,1).toUpperCase() + value.substring(1);
 };
 thx_Strings.upTo = function(value,searchFor) {
 	var pos = value.indexOf(searchFor);
@@ -33639,53 +32251,11 @@ thx_Strings.wrapLine = function(s,columns,indent,newline) {
 	}
 	return indent + parts.join(newline + indent);
 };
-thx_Strings.lpad = function(s,$char,length) {
-	var diff = length - s.length;
-	if(diff > 0) {
-		return thx_Strings.repeat($char,diff) + s;
-	} else {
-		return s;
-	}
-};
-thx_Strings.rpad = function(s,$char,length) {
-	var diff = length - s.length;
-	if(diff > 0) {
-		return s + thx_Strings.repeat($char,diff);
-	} else {
-		return s;
-	}
-};
-var thx_TimePeriod = $hxClasses["thx.TimePeriod"] = { __ename__ : ["thx","TimePeriod"], __constructs__ : ["Second","Minute","Hour","Day","Week","Month","Year"] };
-thx_TimePeriod.Second = ["Second",0];
-thx_TimePeriod.Second.toString = $estr;
-thx_TimePeriod.Second.__enum__ = thx_TimePeriod;
-thx_TimePeriod.Minute = ["Minute",1];
-thx_TimePeriod.Minute.toString = $estr;
-thx_TimePeriod.Minute.__enum__ = thx_TimePeriod;
-thx_TimePeriod.Hour = ["Hour",2];
-thx_TimePeriod.Hour.toString = $estr;
-thx_TimePeriod.Hour.__enum__ = thx_TimePeriod;
-thx_TimePeriod.Day = ["Day",3];
-thx_TimePeriod.Day.toString = $estr;
-thx_TimePeriod.Day.__enum__ = thx_TimePeriod;
-thx_TimePeriod.Week = ["Week",4];
-thx_TimePeriod.Week.toString = $estr;
-thx_TimePeriod.Week.__enum__ = thx_TimePeriod;
-thx_TimePeriod.Month = ["Month",5];
-thx_TimePeriod.Month.toString = $estr;
-thx_TimePeriod.Month.__enum__ = thx_TimePeriod;
-thx_TimePeriod.Year = ["Year",6];
-thx_TimePeriod.Year.toString = $estr;
-thx_TimePeriod.Year.__enum__ = thx_TimePeriod;
-thx_TimePeriod.__empty_constructs__ = [thx_TimePeriod.Second,thx_TimePeriod.Minute,thx_TimePeriod.Hour,thx_TimePeriod.Day,thx_TimePeriod.Week,thx_TimePeriod.Month,thx_TimePeriod.Year];
 var thx__$Timestamp_Timestamp_$Impl_$ = {};
 $hxClasses["thx._Timestamp.Timestamp_Impl_"] = thx__$Timestamp_Timestamp_$Impl_$;
 thx__$Timestamp_Timestamp_$Impl_$.__name__ = ["thx","_Timestamp","Timestamp_Impl_"];
 thx__$Timestamp_Timestamp_$Impl_$.create = function(year,month,day,hour,minute,second) {
 	return thx_Dates.create(year,month,day,hour,minute,second).getTime();
-};
-thx__$Timestamp_Timestamp_$Impl_$.now = function() {
-	return new Date().getTime();
 };
 thx__$Timestamp_Timestamp_$Impl_$.fromDate = function(d) {
 	return d.getTime();
@@ -33820,9 +32390,6 @@ var thx__$Tuple_Tuple2_$Impl_$ = {};
 $hxClasses["thx._Tuple.Tuple2_Impl_"] = thx__$Tuple_Tuple2_$Impl_$;
 thx__$Tuple_Tuple2_$Impl_$.__name__ = ["thx","_Tuple","Tuple2_Impl_"];
 thx__$Tuple_Tuple2_$Impl_$.__properties__ = {get_right:"get_right",get_left:"get_left"}
-thx__$Tuple_Tuple2_$Impl_$.of = function(_0,_1) {
-	return { _0 : _0, _1 : _1};
-};
 thx__$Tuple_Tuple2_$Impl_$._new = function(_0,_1) {
 	return { _0 : _0, _1 : _1};
 };
@@ -33847,18 +32414,12 @@ thx__$Tuple_Tuple2_$Impl_$["with"] = function(this1,v) {
 thx__$Tuple_Tuple2_$Impl_$.toString = function(this1) {
 	return "Tuple2(" + Std.string(this1._0) + "," + Std.string(this1._1) + ")";
 };
-thx__$Tuple_Tuple2_$Impl_$.map = function(this1,f) {
-	return { _0 : this1._0, _1 : f(this1._1)};
-};
 thx__$Tuple_Tuple2_$Impl_$.arrayToTuple2 = function(v) {
 	return { _0 : v[0], _1 : v[1]};
 };
 var thx__$Tuple_Tuple3_$Impl_$ = {};
 $hxClasses["thx._Tuple.Tuple3_Impl_"] = thx__$Tuple_Tuple3_$Impl_$;
 thx__$Tuple_Tuple3_$Impl_$.__name__ = ["thx","_Tuple","Tuple3_Impl_"];
-thx__$Tuple_Tuple3_$Impl_$.of = function(_0,_1,_2) {
-	return { _0 : _0, _1 : _1, _2 : _2};
-};
 thx__$Tuple_Tuple3_$Impl_$._new = function(_0,_1,_2) {
 	return { _0 : _0, _1 : _1, _2 : _2};
 };
@@ -33880,15 +32441,9 @@ thx__$Tuple_Tuple3_$Impl_$.toString = function(this1) {
 thx__$Tuple_Tuple3_$Impl_$.arrayToTuple3 = function(v) {
 	return { _0 : v[0], _1 : v[1], _2 : v[2]};
 };
-thx__$Tuple_Tuple3_$Impl_$.map = function(this1,f) {
-	return { _0 : this1._0, _1 : this1._1, _2 : f(this1._2)};
-};
 var thx__$Tuple_Tuple4_$Impl_$ = {};
 $hxClasses["thx._Tuple.Tuple4_Impl_"] = thx__$Tuple_Tuple4_$Impl_$;
 thx__$Tuple_Tuple4_$Impl_$.__name__ = ["thx","_Tuple","Tuple4_Impl_"];
-thx__$Tuple_Tuple4_$Impl_$.of = function(_0,_1,_2,_3) {
-	return { _0 : _0, _1 : _1, _2 : _2, _3 : _3};
-};
 thx__$Tuple_Tuple4_$Impl_$._new = function(_0,_1,_2,_3) {
 	return { _0 : _0, _1 : _1, _2 : _2, _3 : _3};
 };
@@ -33913,9 +32468,6 @@ thx__$Tuple_Tuple4_$Impl_$.arrayToTuple4 = function(v) {
 var thx__$Tuple_Tuple5_$Impl_$ = {};
 $hxClasses["thx._Tuple.Tuple5_Impl_"] = thx__$Tuple_Tuple5_$Impl_$;
 thx__$Tuple_Tuple5_$Impl_$.__name__ = ["thx","_Tuple","Tuple5_Impl_"];
-thx__$Tuple_Tuple5_$Impl_$.of = function(_0,_1,_2,_3,_4) {
-	return { _0 : _0, _1 : _1, _2 : _2, _3 : _3, _4 : _4};
-};
 thx__$Tuple_Tuple5_$Impl_$._new = function(_0,_1,_2,_3,_4) {
 	return { _0 : _0, _1 : _1, _2 : _2, _3 : _3, _4 : _4};
 };
@@ -33940,9 +32492,6 @@ thx__$Tuple_Tuple5_$Impl_$.arrayToTuple5 = function(v) {
 var thx__$Tuple_Tuple6_$Impl_$ = {};
 $hxClasses["thx._Tuple.Tuple6_Impl_"] = thx__$Tuple_Tuple6_$Impl_$;
 thx__$Tuple_Tuple6_$Impl_$.__name__ = ["thx","_Tuple","Tuple6_Impl_"];
-thx__$Tuple_Tuple6_$Impl_$.of = function(_0,_1,_2,_3,_4,_5) {
-	return { _0 : _0, _1 : _1, _2 : _2, _3 : _3, _4 : _4, _5 : _5};
-};
 thx__$Tuple_Tuple6_$Impl_$._new = function(_0,_1,_2,_3,_4,_5) {
 	return { _0 : _0, _1 : _1, _2 : _2, _3 : _3, _4 : _4, _5 : _5};
 };
@@ -34060,239 +32609,6 @@ thx_Types.anyValueToString = function(value) {
 	}
 	return thx_Types.toString(Type["typeof"](value));
 };
-var thx__$Validation_Validation_$Impl_$ = {};
-$hxClasses["thx._Validation.Validation_Impl_"] = thx__$Validation_Validation_$Impl_$;
-thx__$Validation_Validation_$Impl_$.__name__ = ["thx","_Validation","Validation_Impl_"];
-thx__$Validation_Validation_$Impl_$.__properties__ = {get_either:"get_either"}
-thx__$Validation_Validation_$Impl_$.validation = function(e) {
-	return e;
-};
-thx__$Validation_Validation_$Impl_$.vnel = function(e) {
-	return e;
-};
-thx__$Validation_Validation_$Impl_$.pure = function(a) {
-	return thx_Either.Right(a);
-};
-thx__$Validation_Validation_$Impl_$.success = function(a) {
-	return thx_Either.Right(a);
-};
-thx__$Validation_Validation_$Impl_$.failure = function(e) {
-	return thx_Either.Left(e);
-};
-thx__$Validation_Validation_$Impl_$.nn = function(a,e) {
-	if(a == null) {
-		return thx_Either.Left(e);
-	} else {
-		return thx_Either.Right(a);
-	}
-};
-thx__$Validation_Validation_$Impl_$.successNel = function(a) {
-	return thx_Either.Right(a);
-};
-thx__$Validation_Validation_$Impl_$.failureNel = function(e) {
-	return thx_Either.Left(thx__$Nel_Nel_$Impl_$.pure(e));
-};
-thx__$Validation_Validation_$Impl_$.nnNel = function(a,e) {
-	if(a == null) {
-		return thx_Either.Left(thx__$Nel_Nel_$Impl_$.pure(e));
-	} else {
-		return thx_Either.Right(a);
-	}
-};
-thx__$Validation_Validation_$Impl_$.get_either = function(this1) {
-	return this1;
-};
-thx__$Validation_Validation_$Impl_$.map = function(this1,f) {
-	return thx__$Validation_Validation_$Impl_$.ap(this1,thx_Either.Right(f),function(e1,e2) {
-		throw new js__$Boot_HaxeError("Unreachable");
-	});
-};
-thx__$Validation_Validation_$Impl_$.ap = function(this1,v,s) {
-	switch(this1[1]) {
-	case 0:
-		var e0 = this1[2];
-		var _g = v;
-		switch(_g[1]) {
-		case 0:
-			return thx_Either.Left((thx__$Semigroup_Semigroup_$Impl_$.get_append(s))(e0,_g[2]));
-		case 1:
-			return thx_Either.Left(e0);
-		}
-		break;
-	case 1:
-		var a = this1[2];
-		var _g1 = v;
-		switch(_g1[1]) {
-		case 0:
-			return thx_Either.Left(_g1[2]);
-		case 1:
-			return thx_Either.Right(_g1[2](a));
-		}
-		break;
-	}
-};
-thx__$Validation_Validation_$Impl_$.zip = function(this1,v,s) {
-	return thx__$Validation_Validation_$Impl_$.ap(this1,thx_Eithers.map(v,function(b) {
-		var _1 = b;
-		return function(_0) {
-			return thx__$Tuple_Tuple2_$Impl_$.of(_0,_1);
-		};
-	}),s);
-};
-thx__$Validation_Validation_$Impl_$.leftMap = function(this1,f) {
-	return thx_Eithers.leftMap(this1,f);
-};
-thx__$Validation_Validation_$Impl_$.wrapNel = function(this1) {
-	return thx_Eithers.leftMap(this1,thx__$Nel_Nel_$Impl_$.pure);
-};
-thx__$Validation_Validation_$Impl_$.flatMapV = function(this1,f) {
-	switch(this1[1]) {
-	case 0:
-		return thx_Either.Left(this1[2]);
-	case 1:
-		return f(this1[2]);
-	}
-};
-thx__$Validation_Validation_$Impl_$.val2 = function(f,v1,v2,s) {
-	return thx__$Validation_Validation_$Impl_$.ap(v2,thx__$Validation_Validation_$Impl_$.ap(v1,thx_Either.Right(thx_Functions2.curry(f)),function(e1,e2) {
-		throw new js__$Boot_HaxeError("Unreachable");
-	}),s);
-};
-thx__$Validation_Validation_$Impl_$.val3 = function(f,v1,v2,v3,s) {
-	var f1 = f;
-	return thx__$Validation_Validation_$Impl_$.ap(v3,thx__$Validation_Validation_$Impl_$.ap(v2,thx__$Validation_Validation_$Impl_$.ap(v1,thx_Either.Right(thx_Functions2.curry(function(a,b) {
-		return function(c) {
-			return f1(a,b,c);
-		};
-	})),function(e1,e2) {
-		throw new js__$Boot_HaxeError("Unreachable");
-	}),s),s);
-};
-thx__$Validation_Validation_$Impl_$.val4 = function(f,v1,v2,v3,v4,s) {
-	var f1 = f;
-	var f2 = function(a,b,c) {
-		return function(d) {
-			return f1(a,b,c,d);
-		};
-	};
-	return thx__$Validation_Validation_$Impl_$.ap(v4,thx__$Validation_Validation_$Impl_$.ap(v3,thx__$Validation_Validation_$Impl_$.ap(v2,thx__$Validation_Validation_$Impl_$.ap(v1,thx_Either.Right(thx_Functions2.curry(function(a1,b1) {
-		return function(c1) {
-			return f2(a1,b1,c1);
-		};
-	})),function(e1,e2) {
-		throw new js__$Boot_HaxeError("Unreachable");
-	}),s),s),s);
-};
-thx__$Validation_Validation_$Impl_$.val5 = function(f,v1,v2,v3,v4,v5,s) {
-	var f1 = f;
-	var f2 = function(a,b,c,d) {
-		return function(e) {
-			return f1(a,b,c,d,e);
-		};
-	};
-	var f3 = function(a1,b1,c1) {
-		return function(d1) {
-			return f2(a1,b1,c1,d1);
-		};
-	};
-	return thx__$Validation_Validation_$Impl_$.ap(v5,thx__$Validation_Validation_$Impl_$.ap(v4,thx__$Validation_Validation_$Impl_$.ap(v3,thx__$Validation_Validation_$Impl_$.ap(v2,thx__$Validation_Validation_$Impl_$.ap(v1,thx_Either.Right(thx_Functions2.curry(function(a2,b2) {
-		return function(c2) {
-			return f3(a2,b2,c2);
-		};
-	})),function(e1,e2) {
-		throw new js__$Boot_HaxeError("Unreachable");
-	}),s),s),s),s);
-};
-thx__$Validation_Validation_$Impl_$.val6 = function(f,v1,v2,v3,v4,v5,v6,s) {
-	var f1 = f;
-	var f2 = function(a,b,c,d,e) {
-		return function(f0) {
-			return f1(a,b,c,d,e,f0);
-		};
-	};
-	var f3 = function(a1,b1,c1,d1) {
-		return function(e1) {
-			return f2(a1,b1,c1,d1,e1);
-		};
-	};
-	var f4 = function(a2,b2,c2) {
-		return function(d2) {
-			return f3(a2,b2,c2,d2);
-		};
-	};
-	return thx__$Validation_Validation_$Impl_$.ap(v6,thx__$Validation_Validation_$Impl_$.ap(v5,thx__$Validation_Validation_$Impl_$.ap(v4,thx__$Validation_Validation_$Impl_$.ap(v3,thx__$Validation_Validation_$Impl_$.ap(v2,thx__$Validation_Validation_$Impl_$.ap(v1,thx_Either.Right(thx_Functions2.curry(function(a3,b3) {
-		return function(c3) {
-			return f4(a3,b3,c3);
-		};
-	})),function(e11,e2) {
-		throw new js__$Boot_HaxeError("Unreachable");
-	}),s),s),s),s),s);
-};
-thx__$Validation_Validation_$Impl_$.val7 = function(f,v1,v2,v3,v4,v5,v6,v7,s) {
-	var f1 = f;
-	var f2 = function(a,b,c,d,e,f0) {
-		return function(g) {
-			return f1(a,b,c,d,e,f0,g);
-		};
-	};
-	var f3 = function(a1,b1,c1,d1,e1) {
-		return function(f01) {
-			return f2(a1,b1,c1,d1,e1,f01);
-		};
-	};
-	var f4 = function(a2,b2,c2,d2) {
-		return function(e2) {
-			return f3(a2,b2,c2,d2,e2);
-		};
-	};
-	var f5 = function(a3,b3,c3) {
-		return function(d3) {
-			return f4(a3,b3,c3,d3);
-		};
-	};
-	return thx__$Validation_Validation_$Impl_$.ap(v7,thx__$Validation_Validation_$Impl_$.ap(v6,thx__$Validation_Validation_$Impl_$.ap(v5,thx__$Validation_Validation_$Impl_$.ap(v4,thx__$Validation_Validation_$Impl_$.ap(v3,thx__$Validation_Validation_$Impl_$.ap(v2,thx__$Validation_Validation_$Impl_$.ap(v1,thx_Either.Right(thx_Functions2.curry(function(a4,b4) {
-		return function(c4) {
-			return f5(a4,b4,c4);
-		};
-	})),function(e11,e21) {
-		throw new js__$Boot_HaxeError("Unreachable");
-	}),s),s),s),s),s),s);
-};
-thx__$Validation_Validation_$Impl_$.val8 = function(f,v1,v2,v3,v4,v5,v6,v7,v8,s) {
-	var f1 = f;
-	var f2 = function(a,b,c,d,e,f0,g) {
-		return function(h) {
-			return f1(a,b,c,d,e,f0,g,h);
-		};
-	};
-	var f3 = function(a1,b1,c1,d1,e1,f01) {
-		return function(g1) {
-			return f2(a1,b1,c1,d1,e1,f01,g1);
-		};
-	};
-	var f4 = function(a2,b2,c2,d2,e2) {
-		return function(f02) {
-			return f3(a2,b2,c2,d2,e2,f02);
-		};
-	};
-	var f5 = function(a3,b3,c3,d3) {
-		return function(e3) {
-			return f4(a3,b3,c3,d3,e3);
-		};
-	};
-	var f6 = function(a4,b4,c4) {
-		return function(d4) {
-			return f5(a4,b4,c4,d4);
-		};
-	};
-	return thx__$Validation_Validation_$Impl_$.ap(v8,thx__$Validation_Validation_$Impl_$.ap(v7,thx__$Validation_Validation_$Impl_$.ap(v6,thx__$Validation_Validation_$Impl_$.ap(v5,thx__$Validation_Validation_$Impl_$.ap(v4,thx__$Validation_Validation_$Impl_$.ap(v3,thx__$Validation_Validation_$Impl_$.ap(v2,thx__$Validation_Validation_$Impl_$.ap(v1,thx_Either.Right(thx_Functions2.curry(function(a5,b5) {
-		return function(c5) {
-			return f6(a5,b5,c5);
-		};
-	})),function(e11,e21) {
-		throw new js__$Boot_HaxeError("Unreachable");
-	}),s),s),s),s),s),s),s);
-};
 var thx_error_ErrorWrapper = function(message,innerError,stack,pos) {
 	thx_Error.call(this,message,stack,pos);
 	this.innerError = innerError;
@@ -34394,11 +32710,8 @@ haxe_Serializer.BASE64_CODES = null;
 haxe_Unserializer.DEFAULT_RESOLVER = new haxe__$Unserializer_DefaultResolver();
 haxe_Unserializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";
 haxe_Unserializer.CODES = null;
-haxe_crypto_Base64.CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-haxe_crypto_Base64.BYTES = haxe_io_Bytes.ofString(haxe_crypto_Base64.CHARS);
 haxe_io_FPHelper.i64tmp = new haxe__$Int64__$_$_$Int64(0,0);
 haxe_io_FPHelper.LN2 = 0.6931471805599453;
-haxe_io__$Float32Array_Float32Array_$Impl_$.BYTES_PER_ELEMENT = 4;
 hscript_Parser.p1 = 0;
 hscript_Parser.readPos = 0;
 hscript_Parser.tokenMin = 0;
@@ -34563,7 +32876,6 @@ kha_network_Session.ENTITY_UPDATES = 1;
 kha_network_Session.CONTROLLER_UPDATES = 2;
 kha_network_Session.REMOTE_CALL = 3;
 kha_network_Session.instance = null;
-libnoise_ModuleBase.__rtti = "<class path=\"libnoise.ModuleBase\" params=\"\">\n\t<modules><c path=\"Array\"><c path=\"libnoise.ModuleBase\"/></c></modules>\n\t<get public=\"1\" get=\"inline\" set=\"null\" line=\"13\"><f a=\"index\">\n\t<x path=\"Int\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></get>\n\t<set public=\"1\" get=\"inline\" set=\"null\" line=\"17\"><f a=\"index:value\">\n\t<x path=\"Int\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set>\n\t<length public=\"1\" get=\"inline\" set=\"null\" line=\"21\"><f a=\"\"><x path=\"Int\"/></f></length>\n\t<getValue public=\"1\" set=\"method\" line=\"25\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"8\"><f a=\"count\">\n\t<x path=\"Int\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_Utils.SQRT3 = 1.7320508075688772935;
 libnoise_Utils.OctavesMaximum = 30;
 libnoise_Utils.Deg2Rad = 0.01745329251;
@@ -34574,29 +32886,6 @@ libnoise_Utils.GeneratorSeed = 1013;
 libnoise_Utils.GeneratorShift = 8;
 libnoise_Utils.Randoms = [-0.763874,-0.596439,-0.246489,0.0,0.396055,0.904518,-0.158073,0.0,-0.499004,-0.8665,-0.0131631,0.0,0.468724,-0.824756,0.316346,0.0,0.829598,0.43195,0.353816,0.0,-0.454473,0.629497,-0.630228,0.0,-0.162349,-0.869962,-0.465628,0.0,0.932805,0.253451,0.256198,0.0,-0.345419,0.927299,-0.144227,0.0,-0.715026,-0.293698,-0.634413,0.0,-0.245997,0.717467,-0.651711,0.0,-0.967409,-0.250435,-0.037451,0.0,0.901729,0.397108,-0.170852,0.0,0.892657,-0.0720622,-0.444938,0.0,0.0260084,-0.0361701,0.999007,0.0,0.949107,-0.19486,0.247439,0.0,0.471803,-0.807064,-0.355036,0.0,0.879737,0.141845,0.453809,0.0,0.570747,0.696415,0.435033,0.0,-0.141751,-0.988233,-0.0574584,0.0,-0.58219,-0.0303005,0.812488,0.0,-0.60922,0.239482,-0.755975,0.0,0.299394,-0.197066,-0.933557,0.0,-0.851615,-0.220702,-0.47544,0.0,0.848886,0.341829,-0.403169,0.0,-0.156129,-0.687241,0.709453,0.0,-0.665651,0.626724,0.405124,0.0,0.595914,-0.674582,0.43569,0.0,0.171025,-0.509292,0.843428,0.0,0.78605,0.536414,-0.307222,0.0,0.18905,-0.791613,0.581042,0.0,-0.294916,0.844994,0.446105,0.0,0.342031,-0.58736,-0.7335,0.0,0.57155,0.7869,0.232635,0.0,0.885026,-0.408223,0.223791,0.0,-0.789518,0.571645,0.223347,0.0,0.774571,0.31566,0.548087,0.0,-0.79695,-0.0433603,-0.602487,0.0,-0.142425,-0.473249,-0.869339,0.0,-0.0698838,0.170442,0.982886,0.0,0.687815,-0.484748,0.540306,0.0,0.543703,-0.534446,-0.647112,0.0,0.97186,0.184391,-0.146588,0.0,0.707084,0.485713,-0.513921,0.0,0.942302,0.331945,0.043348,0.0,0.499084,0.599922,0.625307,0.0,-0.289203,0.211107,0.9337,0.0,0.412433,-0.71667,-0.56239,0.0,0.87721,-0.082816,0.47291,0.0,-0.420685,-0.214278,0.881538,0.0,0.752558,-0.0391579,0.657361,0.0,0.0765725,-0.996789,0.0234082,0.0,-0.544312,-0.309435,-0.779727,0.0,-0.455358,-0.415572,0.787368,0.0,-0.874586,0.483746,0.0330131,0.0,0.245172,-0.0838623,0.965846,0.0,0.382293,-0.432813,0.81641,0.0,-0.287735,-0.905514,0.311853,0.0,-0.667704,0.704955,-0.239186,0.0,0.717885,-0.464002,-0.518983,0.0,0.976342,-0.214895,0.0240053,0.0,-0.0733096,-0.921136,0.382276,0.0,-0.986284,0.151224,-0.0661379,0.0,-0.899319,-0.429671,0.0812908,0.0,0.652102,-0.724625,0.222893,0.0,0.203761,0.458023,-0.865272,0.0,-0.030396,0.698724,-0.714745,0.0,-0.460232,0.839138,0.289887,0.0,-0.0898602,0.837894,0.538386,0.0,-0.731595,0.0793784,0.677102,0.0,-0.447236,-0.788397,0.422386,0.0,0.186481,0.645855,-0.740335,0.0,-0.259006,0.935463,0.240467,0.0,0.445839,0.819655,-0.359712,0.0,0.349962,0.755022,-0.554499,0.0,-0.997078,-0.0359577,0.0673977,0.0,-0.431163,-0.147516,-0.890133,0.0,0.299648,-0.63914,0.708316,0.0,0.397043,0.566526,-0.722084,0.0,-0.502489,0.438308,-0.745246,0.0,0.0687235,0.354097,0.93268,0.0,-0.0476651,-0.462597,0.885286,0.0,-0.221934,0.900739,-0.373383,0.0,-0.956107,-0.225676,0.186893,0.0,-0.187627,0.391487,-0.900852,0.0,-0.224209,-0.315405,0.92209,0.0,-0.730807,-0.537068,0.421283,0.0,-0.0353135,-0.816748,0.575913,0.0,-0.941391,0.176991,-0.287153,0.0,-0.154174,0.390458,0.90762,0.0,-0.283847,0.533842,0.796519,0.0,-0.482737,-0.850448,0.209052,0.0,-0.649175,0.477748,0.591886,0.0,0.885373,-0.405387,-0.227543,0.0,-0.147261,0.181623,-0.972279,0.0,0.0959236,-0.115847,-0.988624,0.0,-0.89724,-0.191348,0.397928,0.0,0.903553,-0.428461,-0.00350461,0.0,0.849072,-0.295807,-0.437693,0.0,0.65551,0.741754,-0.141804,0.0,0.61598,-0.178669,0.767232,0.0,0.0112967,0.932256,-0.361623,0.0,-0.793031,0.258012,0.551845,0.0,0.421933,0.454311,0.784585,0.0,-0.319993,0.0401618,-0.946568,0.0,-0.81571,0.551307,-0.175151,0.0,-0.377644,0.00322313,0.925945,0.0,0.129759,-0.666581,-0.734052,0.0,0.601901,-0.654237,-0.457919,0.0,-0.927463,-0.0343576,-0.372334,0.0,-0.438663,-0.868301,-0.231578,0.0,-0.648845,-0.749138,-0.133387,0.0,0.507393,-0.588294,0.629653,0.0,0.726958,0.623665,0.287358,0.0,0.411159,0.367614,-0.834151,0.0,0.806333,0.585117,-0.0864016,0.0,0.263935,-0.880876,0.392932,0.0,0.421546,-0.201336,0.884174,0.0,-0.683198,-0.569557,-0.456996,0.0,-0.117116,-0.0406654,-0.992285,0.0,-0.643679,-0.109196,-0.757465,0.0,-0.561559,-0.62989,0.536554,0.0,0.0628422,0.104677,-0.992519,0.0,0.480759,-0.2867,-0.828658,0.0,-0.228559,-0.228965,-0.946222,0.0,-0.10194,-0.65706,-0.746914,0.0,0.0689193,-0.678236,0.731605,0.0,0.401019,-0.754026,0.52022,0.0,-0.742141,0.547083,-0.387203,0.0,-0.00210603,-0.796417,-0.604745,0.0,0.296725,-0.409909,-0.862513,0.0,-0.260932,-0.798201,0.542945,0.0,-0.641628,0.742379,0.192838,0.0,-0.186009,-0.101514,0.97729,0.0,0.106711,-0.962067,0.251079,0.0,-0.743499,0.30988,-0.592607,0.0,-0.795853,-0.605066,-0.0226607,0.0,-0.828661,-0.419471,-0.370628,0.0,0.0847218,-0.489815,-0.8677,0.0,-0.381405,0.788019,-0.483276,0.0,0.282042,-0.953394,0.107205,0.0,0.530774,0.847413,0.0130696,0.0,0.0515397,0.922524,0.382484,0.0,-0.631467,-0.709046,0.313852,0.0,0.688248,0.517273,0.508668,0.0,0.646689,-0.333782,-0.685845,0.0,-0.932528,-0.247532,-0.262906,0.0,0.630609,0.68757,-0.359973,0.0,0.577805,-0.394189,0.714673,0.0,-0.887833,-0.437301,-0.14325,0.0,0.690982,0.174003,0.701617,0.0,-0.866701,0.0118182,0.498689,0.0,-0.482876,0.727143,0.487949,0.0,-0.577567,0.682593,-0.447752,0.0,0.373768,0.0982991,0.922299,0.0,0.170744,0.964243,-0.202687,0.0,0.993654,-0.035791,-0.106632,0.0,0.587065,0.4143,-0.695493,0.0,-0.396509,0.26509,-0.878924,0.0,-0.0866853,0.83553,-0.542563,0.0,0.923193,0.133398,-0.360443,0.0,0.00379108,-0.258618,0.965972,0.0,0.239144,0.245154,-0.939526,0.0,0.758731,-0.555871,0.33961,0.0,0.295355,0.309513,0.903862,0.0,0.0531222,-0.91003,-0.411124,0.0,0.270452,0.0229439,-0.96246,0.0,0.563634,0.0324352,0.825387,0.0,0.156326,0.147392,0.976646,0.0,-0.0410141,0.981824,0.185309,0.0,-0.385562,-0.576343,-0.720535,0.0,0.388281,0.904441,0.176702,0.0,0.945561,-0.192859,-0.262146,0.0,0.844504,0.520193,0.127325,0.0,0.0330893,0.999121,-0.0257505,0.0,-0.592616,-0.482475,-0.644999,0.0,0.539471,0.631024,-0.557476,0.0,0.655851,-0.027319,-0.754396,0.0,0.274465,0.887659,0.369772,0.0,-0.123419,0.975177,-0.183842,0.0,-0.223429,0.708045,0.66989,0.0,-0.908654,0.196302,0.368528,0.0,-0.95759,-0.00863708,0.288005,0.0,0.960535,0.030592,0.276472,0.0,-0.413146,0.907537,0.0754161,0.0,-0.847992,0.350849,-0.397259,0.0,0.614736,0.395841,0.68221,0.0,-0.503504,-0.666128,-0.550234,0.0,-0.268833,-0.738524,-0.618314,0.0,0.792737,-0.60001,-0.107502,0.0,-0.637582,0.508144,-0.579032,0.0,0.750105,0.282165,-0.598101,0.0,-0.351199,-0.392294,-0.850155,0.0,0.250126,-0.960993,-0.118025,0.0,-0.732341,0.680909,-0.0063274,0.0,-0.760674,-0.141009,0.633634,0.0,0.222823,-0.304012,0.926243,0.0,0.209178,0.505671,0.836984,0.0,0.757914,-0.56629,-0.323857,0.0,-0.782926,-0.339196,0.52151,0.0,-0.462952,0.585565,0.665424,0.0,0.61879,0.194119,-0.761194,0.0,0.741388,-0.276743,0.611357,0.0,0.707571,0.702621,0.0752872,0.0,0.156562,0.819977,0.550569,0.0,-0.793606,0.440216,0.42,0.0,0.234547,0.885309,-0.401517,0.0,0.132598,0.80115,-0.58359,0.0,-0.377899,-0.639179,0.669808,0.0,-0.865993,-0.396465,0.304748,0.0,-0.624815,-0.44283,0.643046,0.0,-0.485705,0.825614,-0.287146,0.0,-0.971788,0.175535,0.157529,0.0,-0.456027,0.392629,0.798675,0.0,-0.0104443,0.521623,-0.853112,0.0,-0.660575,-0.74519,0.091282,0.0,-0.0157698,-0.307475,-0.951425,0.0,-0.603467,-0.250192,0.757121,0.0,0.506876,0.25006,0.824952,0.0,0.255404,0.966794,0.00884498,0.0,0.466764,-0.874228,-0.133625,0.0,0.475077,-0.0682351,-0.877295,0.0,-0.224967,-0.938972,-0.260233,0.0,-0.377929,-0.814757,-0.439705,0.0,-0.305847,0.542333,-0.782517,0.0,0.26658,-0.902905,-0.337191,0.0,0.0275773,0.322158,-0.946284,0.0,0.0185422,0.716349,0.697496,0.0,-0.20483,0.978416,0.0273371,0.0,-0.898276,0.373969,0.230752,0.0,-0.00909378,0.546594,0.837349,0.0,0.6602,-0.751089,0.000959236,0.0,0.855301,-0.303056,0.420259,0.0,0.797138,0.0623013,-0.600574,0.0,0.48947,-0.866813,0.0951509,0.0,0.251142,0.674531,0.694216,0.0,-0.578422,-0.737373,-0.348867,0.0,-0.254689,-0.514807,0.818601,0.0,0.374972,0.761612,0.528529,0.0,0.640303,-0.734271,-0.225517,0.0,-0.638076,0.285527,0.715075,0.0,0.772956,-0.15984,-0.613995,0.0,0.798217,-0.590628,0.118356,0.0,-0.986276,-0.0578337,-0.154644,0.0,-0.312988,-0.94549,0.0899272,0.0,-0.497338,0.178325,0.849032,0.0,-0.101136,-0.981014,0.165477,0.0,-0.521688,0.0553434,-0.851339,0.0,-0.786182,-0.583814,0.202678,0.0,-0.565191,0.821858,-0.0714658,0.0,0.437895,0.152598,-0.885981,0.0,-0.92394,0.353436,-0.14635,0.0,0.212189,-0.815162,-0.538969,0.0,-0.859262,0.143405,-0.491024,0.0,0.991353,0.112814,0.0670273,0.0,0.0337884,-0.979891,-0.196654,0.0];
 libnoise_generator_Billow.__meta__ = { fields : { frequency : { range : null}}};
-libnoise_generator_Billow.__rtti = "<class path=\"libnoise.generator.Billow\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<frequency public=\"1\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\"range\"/></meta>\n\t</frequency>\n\t<lacunarity public=\"1\"><x path=\"Float\"/></lacunarity>\n\t<persistence public=\"1\"><x path=\"Float\"/></persistence>\n\t<octaves public=\"1\"><x path=\"Int\"/></octaves>\n\t<seed public=\"1\"><x path=\"Int\"/></seed>\n\t<quality public=\"1\"><e path=\"libnoise.QualityMode\"/></quality>\n\t<getValue public=\"1\" set=\"method\" line=\"23\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"13\"><f a=\"frequency:lacunarity:persistence:octaves:seed:quality\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Int\"/>\n\t<x path=\"Int\"/>\n\t<e path=\"libnoise.QualityMode\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_generator_Const.__rtti = "<class path=\"libnoise.generator.Const\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<value><x path=\"Int\"/></value>\n\t<getValue public=\"1\" set=\"method\" line=\"12\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"7\"><f a=\"value\">\n\t<x path=\"Int\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_generator_Cylinder.__rtti = "<class path=\"libnoise.generator.Cylinder\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<frequency expr=\"1.0\" line=\"4\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</frequency>\n\t<getValue public=\"1\" set=\"method\" line=\"11\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"6\"><f a=\"frequency\">\n\t<x path=\"Float\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_generator_Perlin.__rtti = "<class path=\"libnoise.generator.Perlin\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<frequency public=\"1\"><x path=\"Float\"/></frequency>\n\t<lacunarity public=\"1\"><x path=\"Float\"/></lacunarity>\n\t<persistence public=\"1\"><x path=\"Float\"/></persistence>\n\t<octaves public=\"1\"><x path=\"Int\"/></octaves>\n\t<seed public=\"1\"><x path=\"Int\"/></seed>\n\t<quality public=\"1\"><e path=\"libnoise.QualityMode\"/></quality>\n\t<getValue public=\"1\" set=\"method\" line=\"22\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"12\"><f a=\"frequency:lacunarity:persistence:octaves:seed:quality\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Int\"/>\n\t<x path=\"Int\"/>\n\t<e path=\"libnoise.QualityMode\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_generator_RidgedMultifractal.__rtti = "<class path=\"libnoise.generator.RidgedMultifractal\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<weights expr=\"new Array&lt;Float&gt;()\" line=\"6\">\n\t\t<c path=\"Array\"><x path=\"Float\"/></c>\n\t\t<meta><m n=\":value\"><e><![CDATA[new Array<Float>()]]></e></m></meta>\n\t</weights>\n\t<frequency public=\"1\"><x path=\"Float\"/></frequency>\n\t<lacunarity public=\"1\"><x path=\"Float\"/></lacunarity>\n\t<persistence public=\"1\"><x path=\"Float\"/></persistence>\n\t<octaves public=\"1\"><x path=\"Int\"/></octaves>\n\t<seed public=\"1\"><x path=\"Int\"/></seed>\n\t<quality public=\"1\"><e path=\"libnoise.QualityMode\"/></quality>\n\t<getValue public=\"1\" set=\"method\" line=\"24\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<updateWeights set=\"method\" line=\"52\"><f a=\"\"><x path=\"Void\"/></f></updateWeights>\n\t<new public=\"1\" set=\"method\" line=\"14\"><f a=\"frequency:lacunarity:octaves:seed:quality\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Int\"/>\n\t<x path=\"Int\"/>\n\t<e path=\"libnoise.QualityMode\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_generator_Sphere.__rtti = "<class path=\"libnoise.generator.Sphere\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<frequency expr=\"1.0\" line=\"5\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</frequency>\n\t<getValue public=\"1\" set=\"method\" line=\"12\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"7\"><f a=\"frequency\">\n\t<x path=\"Float\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_generator_Voronoi.__rtti = "<class path=\"libnoise.generator.Voronoi\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<frequency><x path=\"Float\"/></frequency>\n\t<displacement><x path=\"Float\"/></displacement>\n\t<seed><x path=\"Int\"/></seed>\n\t<distance><x path=\"Bool\"/></distance>\n\t<getValue public=\"1\" set=\"method\" line=\"18\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"10\"><f a=\"frequency:displacement:seed:distance\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Int\"/>\n\t<x path=\"Bool\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Abs.__rtti = "<class path=\"libnoise.operator.Abs\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"20\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"15\"><f a=\"input\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Add.__rtti = "<class path=\"libnoise.operator.Add\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"22\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"16\"><f a=\"lhs:rhs\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Blend.__rtti = "<class path=\"libnoise.operator.Blend\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<controller public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></controller>\n\t<set_controller public=\"1\" get=\"inline\" set=\"null\" line=\"12\"><f a=\"value\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_controller>\n\t<get_controller public=\"1\" get=\"inline\" set=\"null\" line=\"16\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_controller>\n\t<getValue public=\"1\" set=\"method\" line=\"34\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"27\"><f a=\"rhs:lhs:controller\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Clamp.__rtti = "<class path=\"libnoise.operator.Clamp\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<min public=\"1\" expr=\"-1.0\" line=\"10\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>-1.0</e></m></meta>\n\t</min>\n\t<max public=\"1\" expr=\"1.0\" line=\"11\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</max>\n\t<getValue public=\"1\" set=\"method\" line=\"26\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"19\"><f a=\"min:max:input\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Displace.__rtti = "<class path=\"libnoise.operator.Displace\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<X public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></X>\n\t<set_X public=\"1\" get=\"inline\" set=\"null\" line=\"12\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_X>\n\t<get_X public=\"1\" get=\"inline\" set=\"null\" line=\"15\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_X>\n\t<Y public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></Y>\n\t<set_Y public=\"1\" get=\"inline\" set=\"null\" line=\"19\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_Y>\n\t<get_Y public=\"1\" get=\"inline\" set=\"null\" line=\"22\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_Y>\n\t<Z public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></Z>\n\t<set_Z public=\"1\" get=\"inline\" set=\"null\" line=\"26\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_Z>\n\t<get_Z public=\"1\" get=\"inline\" set=\"null\" line=\"29\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_Z>\n\t<getValue public=\"1\" set=\"method\" line=\"48\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"40\"><f a=\"input:x:y:z\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Invert.__rtti = "<class path=\"libnoise.operator.Invert\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"15\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"10\"><f a=\"input\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Max.__rtti = "<class path=\"libnoise.operator.Max\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"17\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"11\"><f a=\"lhs:rhs\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Min.__rtti = "<class path=\"libnoise.operator.Min\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"17\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"11\"><f a=\"lhs:rhs\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Multiply.__rtti = "<class path=\"libnoise.operator.Multiply\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"17\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"11\"><f a=\"lhs:rhs\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Scale.__rtti = "<class path=\"libnoise.operator.Scale\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<sx><x path=\"Float\"/></sx>\n\t<sy><x path=\"Float\"/></sy>\n\t<sz><x path=\"Float\"/></sz>\n\t<getValue public=\"1\" set=\"method\" line=\"23\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"15\">\n\t\t<f a=\"?sx:?sy:?sz:input\" v=\"1.0:1.0:1.0:\">\n\t\t\t<x path=\"Float\"/>\n\t\t\t<x path=\"Float\"/>\n\t\t\t<x path=\"Float\"/>\n\t\t\t<c path=\"libnoise.ModuleBase\"/>\n\t\t\t<x path=\"Void\"/>\n\t\t</f>\n\t\t<meta><m n=\":value\"><e>{ sz : 1.0, sy : 1.0, sx : 1.0 }</e></m></meta>\n\t</new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_ScaleBias.__rtti = "<class path=\"libnoise.operator.ScaleBias\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<scale public=\"1\"><x path=\"Float\"/></scale>\n\t<bias public=\"1\"><x path=\"Float\"/></bias>\n\t<getValue public=\"1\" set=\"method\" line=\"20\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"13\">\n\t\t<f a=\"?scale:?bias:input\" v=\"1.0:0.0:\">\n\t\t\t<x path=\"Float\"/>\n\t\t\t<x path=\"Float\"/>\n\t\t\t<c path=\"libnoise.ModuleBase\"/>\n\t\t\t<x path=\"Void\"/>\n\t\t</f>\n\t\t<meta><m n=\":value\"><e>{ bias : 0.0, scale : 1.0 }</e></m></meta>\n\t</new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_ScaleCoords.__rtti = "<class path=\"libnoise.operator.ScaleCoords\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<X public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></X>\n\t<set_X public=\"1\" get=\"inline\" set=\"null\" line=\"13\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_X>\n\t<get_X public=\"1\" get=\"inline\" set=\"null\" line=\"16\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_X>\n\t<Y public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></Y>\n\t<set_Y public=\"1\" get=\"inline\" set=\"null\" line=\"20\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_Y>\n\t<get_Y public=\"1\" get=\"inline\" set=\"null\" line=\"23\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_Y>\n\t<Z public=\"1\" get=\"accessor\" set=\"accessor\"><c path=\"libnoise.ModuleBase\"/></Z>\n\t<set_Z public=\"1\" get=\"inline\" set=\"null\" line=\"27\"><f a=\"val\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n</f></set_Z>\n\t<get_Z public=\"1\" get=\"inline\" set=\"null\" line=\"30\"><f a=\"\"><c path=\"libnoise.ModuleBase\"/></f></get_Z>\n\t<getValue public=\"1\" set=\"method\" line=\"49\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"41\"><f a=\"input:x:y:z\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Select.__rtti = "<class path=\"libnoise.operator.Select\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<fallOff public=\"1\"><x path=\"Float\"/></fallOff>\n\t<raw public=\"1\"><x path=\"Float\"/></raw>\n\t<min public=\"1\" expr=\"-1.0\" line=\"12\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>-1.0</e></m></meta>\n\t</min>\n\t<max public=\"1\" expr=\"1.0\" line=\"13\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</max>\n\t<getValue public=\"1\" set=\"method\" line=\"34\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"24\">\n\t\t<f a=\"?min:?max:?fallOff:inputA:inputB:controller\" v=\"-1.0:1.0:0.0:::\">\n\t\t\t<x path=\"Float\"/>\n\t\t\t<x path=\"Float\"/>\n\t\t\t<x path=\"Float\"/>\n\t\t\t<c path=\"libnoise.ModuleBase\"/>\n\t\t\t<c path=\"libnoise.ModuleBase\"/>\n\t\t\t<c path=\"libnoise.ModuleBase\"/>\n\t\t\t<x path=\"Void\"/>\n\t\t</f>\n\t\t<meta><m n=\":value\"><e>{ fallOff : 0.0, max : 1.0, min : -1.0 }</e></m></meta>\n\t</new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Subtract.__rtti = "<class path=\"libnoise.operator.Subtract\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<getValue public=\"1\" set=\"method\" line=\"17\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"11\"><f a=\"lhs:rhs\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Translate.__rtti = "<class path=\"libnoise.operator.Translate\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<dx public=\"1\" expr=\"1.0\" line=\"10\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</dx>\n\t<dy public=\"1\" expr=\"1.0\" line=\"11\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</dy>\n\t<dz public=\"1\" expr=\"1.0\" line=\"12\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</dz>\n\t<getValue public=\"1\" set=\"method\" line=\"29\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"21\"><f a=\"dx:dy:dz:input\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
-libnoise_operator_Turbulence.__rtti = "<class path=\"libnoise.operator.Turbulence\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<X0 get=\"inline\" set=\"null\" expr=\"(12414.0 / 65536.0)\" line=\"13\" static=\"1\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>(12414.0 / 65536.0)</e></m></meta>\n\t</X0>\n\t<Y0 get=\"inline\" set=\"null\" expr=\"(65124.0 / 65536.0)\" line=\"14\" static=\"1\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>(65124.0 / 65536.0)</e></m></meta>\n\t</Y0>\n\t<Z0 get=\"inline\" set=\"null\" expr=\"(31337.0 / 65536.0)\" line=\"15\" static=\"1\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>(31337.0 / 65536.0)</e></m></meta>\n\t</Z0>\n\t<X1 get=\"inline\" set=\"null\" expr=\"(26519.0 / 65536.0)\" line=\"16\" static=\"1\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>(26519.0 / 65536.0)</e></m></meta>\n\t</X1>\n\t<Y1 get=\"inline\" set=\"null\" expr=\"(18128.0 / 65536.0)\" line=\"17\" static=\"1\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>(18128.0 / 65536.0)</e></m></meta>\n\t</Y1>\n\t<Z1 get=\"inline\" set=\"null\" expr=\"(60493.0 / 65536.0)\" line=\"18\" static=\"1\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>(60493.0 / 65536.0)</e></m></meta>\n\t</Z1>\n\t<X2 get=\"inline\" set=\"null\" expr=\"(53820.0 / 65536.0)\" line=\"19\" static=\"1\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>(53820.0 / 65536.0)</e></m></meta>\n\t</X2>\n\t<Y2 get=\"inline\" set=\"null\" expr=\"(11213.0 / 65536.0)\" line=\"20\" static=\"1\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>(11213.0 / 65536.0)</e></m></meta>\n\t</Y2>\n\t<Z2 get=\"inline\" set=\"null\" expr=\"(44845.0 / 65536.0)\" line=\"21\" static=\"1\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>(44845.0 / 65536.0)</e></m></meta>\n\t</Z2>\n\t<power public=\"1\" expr=\"1.0\" line=\"23\">\n\t\t<x path=\"Float\"/>\n\t\t<meta><m n=\":value\"><e>1.0</e></m></meta>\n\t</power>\n\t<xDistort><c path=\"libnoise.generator.Perlin\"/></xDistort>\n\t<yDistort><c path=\"libnoise.generator.Perlin\"/></yDistort>\n\t<zDistort><c path=\"libnoise.generator.Perlin\"/></zDistort>\n\t<setFrequency public=\"1\" set=\"method\" line=\"50\"><f a=\"frequency\">\n\t<x path=\"Float\"/>\n\t<x path=\"Void\"/>\n</f></setFrequency>\n\t<setRoughness public=\"1\" set=\"method\" line=\"57\"><f a=\"roughness\">\n\t<x path=\"Int\"/>\n\t<x path=\"Void\"/>\n</f></setRoughness>\n\t<setSeed public=\"1\" set=\"method\" line=\"64\"><f a=\"seed\">\n\t<x path=\"Int\"/>\n\t<x path=\"Void\"/>\n</f></setSeed>\n\t<getValue public=\"1\" set=\"method\" line=\"70\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"28\"><f a=\"power:input:?distortX:?distortY:?distortZ\">\n\t<x path=\"Float\"/>\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<c path=\"libnoise.generator.Perlin\"/>\n\t<c path=\"libnoise.generator.Perlin\"/>\n\t<c path=\"libnoise.generator.Perlin\"/>\n\t<x path=\"Void\"/>\n</f></new>\n\t<meta><m n=\":rtti\"/></meta>\n</class>";
 libnoise_operator_Turbulence.X0 = 0.189422607421875;
 libnoise_operator_Turbulence.Y0 = 0.99371337890625;
 libnoise_operator_Turbulence.Z0 = 0.4781646728515625;
@@ -34606,40 +32895,18 @@ libnoise_operator_Turbulence.Z1 = 0.9230499267578125;
 libnoise_operator_Turbulence.X2 = 0.82122802734375;
 libnoise_operator_Turbulence.Y2 = 0.1710968017578125;
 libnoise_operator_Turbulence.Z2 = 0.6842803955078125;
-modules_CircleWrap.__rtti = "<class path=\"modules.CircleWrap\" params=\"\">\n\t<extends path=\"libnoise.ModuleBase\"/>\n\t<d><x path=\"Float\"/></d>\n\t<PI line=\"8\"><x path=\"Float\"/></PI>\n\t<DEG_TO_RAD line=\"9\"><x path=\"Float\"/></DEG_TO_RAD>\n\t<getValue public=\"1\" set=\"method\" line=\"17\" override=\"1\"><f a=\"x:y:z\">\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Float\"/>\n</f></getValue>\n\t<new public=\"1\" set=\"method\" line=\"11\"><f a=\"inp:diam\">\n\t<c path=\"libnoise.ModuleBase\"/>\n\t<x path=\"Float\"/>\n\t<x path=\"Void\"/>\n</f></new>\n</class>";
 thx_Floats.TOLERANCE = 10e-5;
-thx_Floats.EPSILON = 1e-9;
+thx_Floats.EPSILON = 10e-10;
 thx_Floats.pattern_parse = new EReg("^(\\+|-)?\\d+(\\.\\d+)?(e-?\\d+)?$","");
-thx_Ints.pattern_parse = new EReg("^[ \t\r\n]*[+-]?(\\d+|0x[0-9A-F]+)","i");
+thx_Ints.pattern_parse = new EReg("^[+-]?(\\d+|0x[0-9A-F]+)$","i");
 thx_Ints.BASE = "0123456789abcdefghijklmnopqrstuvwxyz";
-thx_Ints.order = function(i0,i1) {
-	if(i0 > i1) {
-		return thx_OrderingImpl.GT;
-	} else if(i0 == i1) {
-		return thx_OrderingImpl.EQ;
-	} else {
-		return thx_OrderingImpl.LT;
-	}
-};
-thx_Ints.monoid = { zero : 0, append : function(a,b) {
-	return a + b;
-}};
-thx_Strings.ord = thx__$Ord_Ord_$Impl_$.fromIntComparison(thx_Strings.compare);
-thx_Strings.HASCODE_MAX = 2147483647;
-thx_Strings.HASCODE_MUL = 31;
-thx_Strings.monoid = { zero : "", append : function(a,b) {
-	return a + b;
-}};
 thx_Strings.UCWORDS = new EReg("[^a-zA-Z]([a-z])","g");
-thx_Strings.IS_BREAKINGWHITESPACE = new EReg("[^\t\n\r ]","");
-thx_Strings.IS_ALPHA = new EReg("[^a-zA-Z]","");
 thx_Strings.UCWORDSWS = new EReg("[ \t\r\n][a-z]","g");
 thx_Strings.ALPHANUM = new EReg("^[a-z0-9]+$","i");
 thx_Strings.DIGITS = new EReg("^[0-9]+$","");
 thx_Strings.STRIPTAGS = new EReg("</?[a-z]+[^>]*>","gi");
 thx_Strings.WSG = new EReg("[ \t\r\n]+","g");
 thx_Strings.SPLIT_LINES = new EReg("\r\n|\n\r|\n|\r","g");
-thx_Strings.CANONICALIZE_LINES = new EReg("\r\n|\n\r|\r","g");
 Main.main();
 })(typeof window != "undefined" ? window : typeof global != "undefined" ? global : typeof self != "undefined" ? self : this);
 var kha = $hx_exports["kha"];

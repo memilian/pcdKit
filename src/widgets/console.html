@@ -1,0 +1,9 @@
+<template>
+    <div ref="console">
+        <!--<template repeat.for="line of lines">
+            <p click=toggleLineDetails($index)>${line.message}</p>
+            <p show.bind="lineStates[$index]">${line.stack}</p>
+        </template>-->
+        <p class="console-${messageType}">${message}</p>
+    </div>
+</template> 

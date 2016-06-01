@@ -2,7 +2,6 @@ package;
 
 import modules.CircleWrap;
 import modules.CircleWrap;
-import libnoise.operator.ScaleCoords;
 import libnoise.operator.Displace;
 import libnoise.operator.Translate;
 import libnoise.generator.Cylinder;
@@ -120,8 +119,7 @@ class PcdKit {
 		interp.variables.set("Displace", Displace);
 		interp.variables.set("Translate", Translate);
 		interp.variables.set("CircleWrap", CircleWrap);
-		interp.variables.set("ScaleCoords", ScaleCoords);
-
+   
 
 		interp.variables.set("_scaleNormedValue", function(value, newmin, newmax){
 			return value * newmax + newmin;
@@ -144,7 +142,7 @@ class PcdKit {
 		textureDirty = true;
 	}
 
-	var throttle = 0.3;
+	var debounce = 0.3;
 	var lastChange = 0.0;
 	var codeDirty = false;
 	public function oncodechanged(infos):Void {
@@ -164,7 +162,7 @@ class PcdKit {
 	}
 
 	public function updateTexture():Void {
-		if(!codeDirty || Scheduler.realTime()-lastChange < throttle) return;
+		if(!codeDirty || Scheduler.realTime()-lastChange < debounce) return;
 		codeDirty = false;
 		var code = ProjectManager.currentModule.code;
 		try{
@@ -173,9 +171,14 @@ class PcdKit {
 			module = interp.variables.get('module');
 			if(module != null)
 				generateTexture();
+			PcdKit.events.publish('console-message',{
+				message:'ok',
+				type:'info'
+			});
 		}catch(ex : Dynamic){
-			PcdKit.events.publish('interp-error',{
-				message:ex
+			PcdKit.events.publish('console-message',{
+				message:ex,
+				type:'error'
 			});
 		}
 	}

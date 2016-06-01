@@ -1,5 +1,6 @@
 dist
 .idea
+.vscode
 jspm_packages
 node_modules
 pcd_tools/Libraries

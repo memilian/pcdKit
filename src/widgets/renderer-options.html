@@ -24,6 +24,12 @@
                 <color-selector class="col s5" color.two-way="atmoColor"  change.trigger="notifyDelayedChanges()"></color-selector>
             </div>
         </div>
+        <div show.bind="!module.options.planetShape">
+            <div class="row valign-wrapper">
+                <div class="col s5">tileable :</div>
+                <md-switch class="col s7" change.trigger="notifyDelayedChanges()" md-label-on="on" md-label-off="off" md-checked.bind="module.options.seamless"></md-switch>
+            </div>
+        </div>
         <div class="row valign-wrapper">
             <div class="col s7">background color :</div>
             <color-selector class="col s5" color.two-way="backgroundColor" change.trigger="notifyDelayedChanges()"></color-selector>

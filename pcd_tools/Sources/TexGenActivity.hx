@@ -16,7 +16,7 @@ import activity.CallMe;
 
 class TexGenActivity {
 
-    var sum = 0;
+    var curRow = 0;
     public var mq : MessageQueue<TexGenMessage>;
 
     var noiseMapBuilder : NoiseMapBuilderByRow;
@@ -33,13 +33,16 @@ class TexGenActivity {
         this.mq = mq;
         mq.receiver.receive = function(msg : TexGenMessage){
             switch(msg){
-                case Generate(mod, options, tex) :
+                case Generate(mod, options, tex) : 
+                    curRow = 0;
                     this.module = mod;
                     this.gradient = options.gradient;
                     this.size = options.size;
                     this.options = options;
                     this.radius = Math.ceil(size/2);
                     if(options.planetShape){
+                        //scale the module
+                        this.module = new libnoise.operator.Scale(100,100,100, this.module);
                         var builder = new NoiseMapBuilderSphereByRow();
                         builder.sourceModule = this.module;
                         builder.setDestSize(size, size);
@@ -50,7 +53,7 @@ class TexGenActivity {
                         builder.sourceModule = this.module;
                         builder.setDestSize(size, size);
                         builder.setBounds(0,0,256,256);
-                        builder.isSeamlessEnabled = true;
+                        builder.isSeamlessEnabled = options.seamless;
                         this.noiseMapBuilder = cast builder;
                     }
                     noiseMap = new NoiseMap(size,size);
@@ -67,6 +70,7 @@ class TexGenActivity {
         try{
 
             noiseMapBuilder.callback = function(row){
+                curRow++;
                 var g = texture.g2;
                 if(noiseMapBuilder.curRow == 0)
                     g.begin(true, options.backgroundColor);
@@ -82,10 +86,10 @@ class TexGenActivity {
                 g.end();
             }
             if(!noiseMapBuilder.buildNext()){
-                //if(currRow %2 == 0)
+                if(currRow %2 == 0)
                     CallMe.soon(process);
-               // else{
-                 //   CallMe.immediately(process);
+                else
+                    CallMe.immediately(process);
                // }
             }
                 /*if(currRow++ < size){

@@ -125,3 +125,20 @@ div.au-stagger {
   }
 }
 
+.console{
+    max-height: 50px;
+    overflow-y: scroll;
+    position: fixed;
+    bottom: 0;
+    z-index: 999;
+    width: 100%;
+    background: lightgray;
+}
+
+.console-error{
+  color: red
+}
+ 
+.console-info{
+  color: blue;
+}

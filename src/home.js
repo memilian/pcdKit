@@ -15,8 +15,6 @@ export class Home {
         this.eva.subscribe('editor-mode', function(mode){
             this.editorMode = mode;
         }.bind(this));
-
-        this.eva.subscribe('interp-error', err => console.error(err.message));
     }
 
     attached(){
@@ -81,6 +79,31 @@ export class Home {
                 closable:false
             }
         });
+        /*
+        this.codeLayout = $('#code-layout-container').layout({
+            onload:customLoadState,
+            onunload:customSaveState,
+            stateManagement: {
+                enabled: true,
+                autoSave:false,
+                autoLoad:false
+            },
+            defaults: {
+                applyDefaultStyles: false,
+                resizable: true,
+                slidable: false
+            },
+            south:{
+                paneSelector:'.code-layout-south',
+                size:100
+            },
+            center:{
+                paneSelector:'.code-layout-center',
+                minSize:300,
+                minHeight:300,
+                closable:false
+            }
+        });*/
         $(window).trigger('resize');
         this
     }
