@@ -887,22 +887,11 @@ PcdKit.prototype = {
 	,mq: null
 	,texGenActivity: null
 	,editorLoaded: function() {
-		var _gthis = this;
 		this.editor = window.editor;
-		this.editor.completers.push({ getCompletions : function(editor,session,pos,prefix,callback) {
-			var candidates = [];
-			var tmp = _gthis.interp.variables.keys();
-			while(tmp.hasNext()) {
-				var key = tmp.next();
-				candidates.push({ value : key, score : 100, meta : "libnoise"});
-			}
-			callback(null,candidates);
-		}});
 	}
 	,module: null
 	,texture: null
 	,setupInterp: function() {
-		new libnoise_generator_Perlin(0.003,1.0,0.5,8,321,libnoise_QualityMode.HIGH);
 		this.module = new libnoise_generator_Billow(0.003,1.0,0.5,8,123,libnoise_QualityMode.HIGH);
 		var _this = this.interp.variables;
 		var value = libnoise_QualityMode.HIGH;
@@ -1080,20 +1069,34 @@ PcdKit.prototype = {
 			_this24.h["Translate"] = value24;
 		}
 		var _this25 = this.interp.variables;
-		var value25 = modules_CircleWrap;
-		if(__map_reserved.CircleWrap != null) {
-			_this25.setReserved("CircleWrap",value25);
+		var value25 = libnoise_operator_Exponent;
+		if(__map_reserved.Exponent != null) {
+			_this25.setReserved("Exponent",value25);
 		} else {
-			_this25.h["CircleWrap"] = value25;
+			_this25.h["Exponent"] = value25;
 		}
 		var _this26 = this.interp.variables;
+		var value26 = libnoise_operator_Power;
+		if(__map_reserved.Power != null) {
+			_this26.setReserved("Power",value26);
+		} else {
+			_this26.h["Power"] = value26;
+		}
+		var _this27 = this.interp.variables;
+		var value27 = libnoise_operator_Rotate;
+		if(__map_reserved.Rotate != null) {
+			_this27.setReserved("Rotate",value27);
+		} else {
+			_this27.h["Rotate"] = value27;
+		}
+		var _this28 = this.interp.variables;
 		if(__map_reserved._scaleNormedValue != null) {
-			_this26.setReserved("_scaleNormedValue",function(value261,newmin1,newmax1) {
-				return value261 * newmax1 + newmin1;
+			_this28.setReserved("_scaleNormedValue",function(value281,newmin1,newmax1) {
+				return value281 * newmax1 + newmin1;
 			});
 		} else {
-			_this26.h["_scaleNormedValue"] = function(value261,newmin1,newmax1) {
-				return value261 * newmax1 + newmin1;
+			_this28.h["_scaleNormedValue"] = function(value281,newmin1,newmax1) {
+				return value281 * newmax1 + newmin1;
 			};
 		}
 	}
@@ -1161,7 +1164,7 @@ PcdKit.prototype = {
 		} catch( exception ) {
 			haxe_CallStack.lastException = exception;
 			if (exception instanceof js__$Boot_HaxeError) exception = exception.val;
-			haxe_Log.trace(exception,{ fileName : "PcdKit.hx", lineNumber : 195, className : "PcdKit", methodName : "update"});
+			haxe_Log.trace(exception,{ fileName : "PcdKit.hx", lineNumber : 200, className : "PcdKit", methodName : "update"});
 		}
 	}
 	,render: function(framebuffer) {
@@ -1851,12 +1854,16 @@ TexGenActivity.prototype = {
 				g.end();
 			};
 			if(!this.noiseMapBuilder.buildNext()) {
-				activity_CallMe.soon($bind(this,this.process));
+				if(this.curRow % 2 == 0) {
+					activity_CallMe.soon($bind(this,this.process));
+				} else {
+					activity_CallMe.immediately($bind(this,this.process));
+				}
 			}
 		} catch( ex ) {
 			haxe_CallStack.lastException = ex;
 			if (ex instanceof js__$Boot_HaxeError) ex = ex.val;
-			haxe_Log.trace(ex,{ fileName : "TexGenActivity.hx", lineNumber : 138, className : "TexGenActivity", methodName : "process"});
+			haxe_Log.trace(ex,{ fileName : "TexGenActivity.hx", lineNumber : 137, className : "TexGenActivity", methodName : "process"});
 		}
 	}
 	,__class__: TexGenActivity
@@ -29264,6 +29271,22 @@ libnoise_operator_Displace.prototype = $extend(libnoise_ModuleBase.prototype,{
 	,__class__: libnoise_operator_Displace
 	,__properties__: {set_Z:"set_Z",get_Z:"get_Z",set_Y:"set_Y",get_Y:"get_Y",set_X:"set_X",get_X:"get_X"}
 });
+var libnoise_operator_Exponent = function(exponent,input) {
+	this.exponent = 1.0;
+	libnoise_ModuleBase.call(this,1);
+	this.modules[0] = input;
+	this.exponent = exponent;
+};
+$hxClasses["libnoise.operator.Exponent"] = libnoise_operator_Exponent;
+libnoise_operator_Exponent.__name__ = ["libnoise","operator","Exponent"];
+libnoise_operator_Exponent.__super__ = libnoise_ModuleBase;
+libnoise_operator_Exponent.prototype = $extend(libnoise_ModuleBase.prototype,{
+	exponent: null
+	,getValue: function(x,y,z) {
+		return Math.pow(Math.abs((this.modules[0].getValue(x,y,z) + 1) / 2.0),this.exponent) * 2 - 1;
+	}
+	,__class__: libnoise_operator_Exponent
+});
 var libnoise_operator_Invert = function(input) {
 	libnoise_ModuleBase.call(this,1);
 	this.modules[0] = input;
@@ -29318,6 +29341,78 @@ libnoise_operator_Multiply.prototype = $extend(libnoise_ModuleBase.prototype,{
 		return this.modules[0].getValue(x,y,z) * this.modules[1].getValue(x,y,z);
 	}
 	,__class__: libnoise_operator_Multiply
+});
+var libnoise_operator_Power = function(lhs,rhs) {
+	libnoise_ModuleBase.call(this,2);
+	this.modules[0] = lhs;
+	this.modules[1] = rhs;
+};
+$hxClasses["libnoise.operator.Power"] = libnoise_operator_Power;
+libnoise_operator_Power.__name__ = ["libnoise","operator","Power"];
+libnoise_operator_Power.__super__ = libnoise_ModuleBase;
+libnoise_operator_Power.prototype = $extend(libnoise_ModuleBase.prototype,{
+	getValue: function(x,y,z) {
+		return Math.pow(this.modules[0].getValue(x,y,z),this.modules[1].getValue(x,y,z));
+	}
+	,__class__: libnoise_operator_Power
+});
+var libnoise_operator_Rotate = function(rx,ry,rz,input) {
+	if(rz == null) {
+		rz = 0.0;
+	}
+	if(ry == null) {
+		ry = 0.0;
+	}
+	if(rx == null) {
+		rx = 0.0;
+	}
+	libnoise_ModuleBase.call(this,1);
+	this.modules[0] = input;
+	this.rx = rx;
+	this.ry = ry;
+	this.rz = rz;
+	this.setAngles(rx,ry,rz);
+};
+$hxClasses["libnoise.operator.Rotate"] = libnoise_operator_Rotate;
+libnoise_operator_Rotate.__name__ = ["libnoise","operator","Rotate"];
+libnoise_operator_Rotate.__super__ = libnoise_ModuleBase;
+libnoise_operator_Rotate.prototype = $extend(libnoise_ModuleBase.prototype,{
+	rx: null
+	,x1Matrix: null
+	,x2Matrix: null
+	,x3Matrix: null
+	,ry: null
+	,y1Matrix: null
+	,y2Matrix: null
+	,y3Matrix: null
+	,rz: null
+	,z1Matrix: null
+	,z2Matrix: null
+	,z3Matrix: null
+	,setAngles: function(_rx,_ry,_rz) {
+		var xc = Math.cos(_rx * 0.01745329251);
+		var yc = Math.cos(_ry * 0.01745329251);
+		var zc = Math.cos(_rz * 0.01745329251);
+		var xs = Math.sin(_rx * 0.01745329251);
+		var ys = Math.sin(_ry * 0.01745329251);
+		var zs = Math.sin(_rz * 0.01745329251);
+		this.x1Matrix = ys * xs * zs + yc * zc;
+		this.y1Matrix = xc * zs;
+		this.z1Matrix = ys * zc - yc * xs * zs;
+		this.x2Matrix = ys * xs * zc - yc * zs;
+		this.y2Matrix = xc * zc;
+		this.z2Matrix = -yc * xs * zc - ys * zs;
+		this.x3Matrix = -ys * xc;
+		this.y3Matrix = xs;
+		this.z3Matrix = yc * xc;
+		this.rx = _rx;
+		this.ry = _ry;
+		this.rz = _rz;
+	}
+	,getValue: function(x,y,z) {
+		return this.modules[0].getValue(this.x1Matrix * x + this.y1Matrix * y + this.z1Matrix * z,this.x2Matrix * x + this.y2Matrix * y + this.z2Matrix * z,this.x3Matrix * x + this.y3Matrix * y + this.z3Matrix * z);
+	}
+	,__class__: libnoise_operator_Rotate
 });
 var libnoise_operator_Scale = function(sx,sy,sz,input) {
 	if(sz == null) {

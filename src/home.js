@@ -28,7 +28,7 @@ export class Home {
         }
 
         this.layout = $('#main-layout-container').layout({
-            onload:customLoadState,
+           // onload:customLoadState,
             onunload:customSaveState,
             stateManagement: {
                 enabled: true,
@@ -79,31 +79,7 @@ export class Home {
                 closable:false
             }
         });
-        /*
-        this.codeLayout = $('#code-layout-container').layout({
-            onload:customLoadState,
-            onunload:customSaveState,
-            stateManagement: {
-                enabled: true,
-                autoSave:false,
-                autoLoad:false
-            },
-            defaults: {
-                applyDefaultStyles: false,
-                resizable: true,
-                slidable: false
-            },
-            south:{
-                paneSelector:'.code-layout-south',
-                size:100
-            },
-            center:{
-                paneSelector:'.code-layout-center',
-                minSize:300,
-                minHeight:300,
-                closable:false
-            }
-        });*/
+       
         $(window).trigger('resize');
         this
     }

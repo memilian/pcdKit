@@ -73,22 +73,25 @@ class PcdKit {
 	public function editorLoaded():Void {
 		untyped this.editor = window.editor;
 		//editor.getSession().on('change', oncodechanged);
-		editor.completers.push({
-			getCompletions: function(editor, session, pos, prefix, callback) {
-				var candidates = [];
-				for(key in interp.variables.keys()){
-					candidates.push({value:key, score: 100, meta:"libnoise"});
-				}
-				callback(null, candidates);
-			}
-		});
+		// editor.completers.push({
+		// 	getCompletions: function(editor, session, pos, prefix, callback) {
+		// 		var candidates = [];
+		// 		for(key in interp.variables.keys()){
+		// 			candidates.push({value:key, score: 100, meta:"libnoise", caption:'yaaaay'});
+		// 		}
+		// 		callback(null, candidates);
+		// 	},
+		// 	getDocTooltip: function(item) {
+		// 		if(item.meta=='libnoise')
+		// 		item.docHTML = '<b>${item.value}</b><hr></hr>${item.caption}';
+    	// 	}
+		// });
 	}
 
 	var module : ModuleBase;
 	var texture : kha.Image;
 
 	public function setupInterp():Void {
-		var perlin = new Perlin(0.003, 1.0, 0.5, 8,  321, HIGH);
 		module = new Billow(0.003, 1.0, 0.5, 8,  123, HIGH);
 
 		interp.variables.set("HIGH", QualityMode.HIGH);
@@ -118,7 +121,9 @@ class PcdKit {
 		interp.variables.set("Clamp", Clamp);
 		interp.variables.set("Displace", Displace);
 		interp.variables.set("Translate", Translate);
-		interp.variables.set("CircleWrap", CircleWrap);
+		interp.variables.set("Exponent", libnoise.operator.Exponent);
+		interp.variables.set("Power", libnoise.operator.Power);
+		interp.variables.set("Rotate", libnoise.operator.Rotate);
    
 
 		interp.variables.set("_scaleNormedValue", function(value, newmin, newmax){

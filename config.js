@@ -35,6 +35,8 @@ System.config({
     "systemjs/plugin-css": "github:systemjs/plugin-css@0.1.21",
     "text": "github:systemjs/plugin-text@0.0.3",
     "theme-monokai.js": "github:ajaxorg/ace-builds@1.2.3",
+    "text.js": "github:ajaxorg/ace-builds@1.2.3/snippets",
+    "haxe.js": "github:ajaxorg/ace-builds@1.2.3/snippets",
     "github:Dogfalo/materialize@0.97.6": {
       "css": "github:systemjs/plugin-css@0.1.21",
       "jquery": "npm:jquery@2.2.3"

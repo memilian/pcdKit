@@ -1,23 +1,24 @@
 #automatically generated do not edit
-#@date Tue May 31 2016 19:15:43 GMT+0200 (CEST)
+#@date Thu Jun 02 2016 16:46:03 GMT+0200 (CEST)
 -cp /home/memilian/dev/lib/Kha/Sources/
 -cp /home/memilian/dev/lib/Kha/Backends/HTML5/
 -cp /home/memilian/dev/rnd/pcdKit/pcd_tools/Sources/
--cp /home/memilian/dev/haxelib/activity/0,1,0/
+-cp /home/memilian/dev/rnd/pcdKit/pcd_tools/Libraries/activity/Sources/
 -cp /home/memilian/dev/haxelib/thx,core/git/src/
 -cp /home/memilian/dev/haxelib/thx,unit/0,7,1/src/
 -cp /home/memilian/dev/haxelib/thx,core/git/src/
--cp /home/memilian/dev/haxelib/libnoise/1,0,0/Sources/
--cp /home/memilian/dev/haxelib/hscript/2,0,4/
+-cp /home/memilian/dev/rnd/libnoise/Sources/
+-cp /home/memilian/dev/haxelib/hscript/2,0,7/
 -cp /home/memilian/dev/haxelib/compiletime/2,5,1/src/
--cp /home/memilian/dev/haxelib/activity/0,1,0/
+-cp /home/memilian/dev/rnd/pcdKit/pcd_tools/Libraries/activity/
 -cp /home/memilian/dev/haxelib/thx,core/git/
 -cp /home/memilian/dev/haxelib/thx,unit/0,7,1/
 -cp /home/memilian/dev/haxelib/thx,core/git/
--cp /home/memilian/dev/haxelib/libnoise/1,0,0/
--cp /home/memilian/dev/haxelib/hscript/2,0,4/
+-cp /home/memilian/dev/rnd/libnoise/
+-cp /home/memilian/dev/haxelib/hscript/2,0,7/
 -cp /home/memilian/dev/haxelib/compiletime/2,5,1/
 -D shallow-expose
+-D hscriptpos
 -D sys_g1
 -D sys_g2
 -D sys_g3
@@ -30,6 +31,7 @@
 -D thx_core
 -D thx_core
 -D thx_unit
+--macro keep('IntIterator')
 #@begin-cache -lib activity
 -cp /home/memilian/dev/haxelib/activity/0,1,0/src/
 -D activity=0.1.0

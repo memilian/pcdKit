@@ -68,7 +68,6 @@ class TexGenActivity {
 
     public function process():Void {
         try{
-
             noiseMapBuilder.callback = function(row){
                 curRow++;
                 var g = texture.g2;
@@ -86,7 +85,7 @@ class TexGenActivity {
                 g.end();
             }
             if(!noiseMapBuilder.buildNext()){
-                if(currRow %2 == 0)
+                if(curRow %2 == 0)
                     CallMe.soon(process);
                 else
                     CallMe.immediately(process);
